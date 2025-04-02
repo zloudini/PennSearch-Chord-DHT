@@ -37,6 +37,8 @@ class PennChordMessage : public Header
       PING_REQ = 1,
       PING_RSP = 2,
       // Define extra message types when needed
+      FIND_SUCCESSOR_REQ = 3,
+      FIND_SUCCESSOR_RSP = 4,
     };
 
     PennChordMessage (PennChordMessage::MessageType messageType, uint32_t transactionId);
@@ -101,11 +103,36 @@ class PennChordMessage : public Header
         std::string pingMessage;
       };
 
+    struct FindSuccessorReq
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      uint32_t idToFind;
+      Ipv4Address requestorIp;
+    };
+
+    struct FindSuccessorRsp
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address successorIp;
+    };
+    
+    
+
   private:
     struct
       {
         PingReq pingReq;
         PingRsp pingRsp;
+        FindSuccessorReq findSuccessorReq;
+        FindSuccessorRsp findSuccessorRsp;
       } m_message;
     
   public:
@@ -130,6 +157,13 @@ class PennChordMessage : public Header
      *  \param message Payload String
      */
     void SetPingRsp (std::string message);
+
+    void SetFindSuccessorReq(uint32_t idToFind, Ipv4Address requestorIp);
+    FindSuccessorReq GetFindSuccessorReq();
+
+    void SetFindSuccessorRsp(Ipv4Address successorIp);
+    FindSuccessorRsp GetFindSuccessorRsp();
+
 
 }; // class PennChordMessage
 

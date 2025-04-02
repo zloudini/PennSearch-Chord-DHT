@@ -66,6 +66,12 @@ PennChordMessage::GetSerializedSize (void) const
       case PING_RSP:
         size += m_message.pingRsp.GetSerializedSize ();
         break;
+      case FIND_SUCCESSOR_REQ:
+        size += m_message.findSuccessorReq.GetSerializedSize ();
+        break;
+      case FIND_SUCCESSOR_RSP:
+        size += m_message.findSuccessorRsp.GetSerializedSize ();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -88,6 +94,12 @@ PennChordMessage::Print (std::ostream &os) const
       case PING_RSP:
         m_message.pingRsp.Print (os);
         break;
+      case FIND_SUCCESSOR_REQ:
+        m_message.findSuccessorReq.Print (os);
+        break;
+      case FIND_SUCCESSOR_RSP:
+        m_message.findSuccessorRsp.Print (os);
+        break;
       default:
         break;  
     }
@@ -108,6 +120,12 @@ PennChordMessage::Serialize (Buffer::Iterator start) const
         break;
       case PING_RSP:
         m_message.pingRsp.Serialize (i);
+        break;
+      case FIND_SUCCESSOR_REQ:
+        m_message.findSuccessorReq.Serialize (i);
+        break;
+      case FIND_SUCCESSOR_RSP:
+        m_message.findSuccessorRsp.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -131,6 +149,12 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
         break;
       case PING_RSP:
         size += m_message.pingRsp.Deserialize (i);
+        break;
+      case FIND_SUCCESSOR_REQ:
+        size += m_message.findSuccessorReq.Deserialize (i);
+        break;
+      case FIND_SUCCESSOR_RSP:
+        size += m_message.findSuccessorRsp.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -246,6 +270,97 @@ PennChordMessage::GetPingRsp ()
   return m_message.pingRsp;
 }
 
+/*FindSuccessorReq*/
+uint32_t 
+PennChordMessage::FindSuccessorReq::GetSerializedSize (void) const
+{
+  return sizeof(uint32_t) + IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::FindSuccessorReq::Print (std::ostream &os) const
+{
+  os << "FindSuccessorReq:: idToFind = " << idToFind << ", requestorIp = " << requestorIp << "\n";
+}
+
+void
+PennChordMessage::FindSuccessorReq::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteHtonU32(idToFind);
+  uint32_t ip = requestorIp.Get();
+  start.WriteHtonU32(ip);
+}
+
+uint32_t
+PennChordMessage::FindSuccessorReq::Deserialize (Buffer::Iterator &start)
+{ 
+  // read id to find 
+  idToFind = start.ReadNtohU32();
+  // read in ip of requestor
+  requestorIp = Ipv4Address(start.ReadNtohU32());
+  return FindSuccessorReq::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetFindSuccessorReq (uint32_t idToFind, Ipv4Address requestorIp)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = FIND_SUCCESSOR_REQ;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == FIND_SUCCESSOR_REQ);
+    }
+  m_message.findSuccessorReq.idToFind = idToFind;
+  m_message.findSuccessorReq.requestorIp = requestorIp;
+}
+
+PennChordMessage::FindSuccessorReq
+PennChordMessage::GetFindSuccessorReq ()
+{
+  return m_message.findSuccessorReq;
+}
+
+
+/*FindSuccessorRsp*/
+uint32_t PennChordMessage::FindSuccessorRsp::GetSerializedSize() const {
+  return IPV4_ADDRESS_SIZE;
+}
+
+void PennChordMessage::FindSuccessorRsp::Print(std::ostream &os) const {
+  os << "FindSuccessorRsp:: successorIp = " << successorIp;
+}
+
+void PennChordMessage::FindSuccessorRsp::Serialize(Buffer::Iterator &start) const {
+  uint32_t ip = successorIp.Get();
+  start.WriteHtonU32(ip);
+}
+
+uint32_t PennChordMessage::FindSuccessorRsp::Deserialize(Buffer::Iterator &start) {
+  successorIp = Ipv4Address(start.ReadNtohU32());
+  return GetSerializedSize();
+}
+
+void
+PennChordMessage::SetFindSuccessorRsp (Ipv4Address succesorIp)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = FIND_SUCCESSOR_RSP;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == FIND_SUCCESSOR_RSP);
+    }
+  m_message.findSuccessorRsp.successorIp = succesorIp;
+}
+
+PennChordMessage::FindSuccessorRsp
+PennChordMessage::GetFindSuccessorRsp ()
+{
+  return m_message.findSuccessorRsp;
+}
 
 
 void

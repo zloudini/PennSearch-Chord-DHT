@@ -76,6 +76,8 @@ PennChord::StartApplication (void)
       // std::cout << "reset m_socekt to not null, now is " << m_socket << std::endl;
     }  
   
+  m_nodeHash = PennKeyHelper::CreateShaKey(GetLocalAddress());
+
   // Configure timers
   m_auditPingsTimer.SetFunction (&PennChord::AuditPings, this);
   // Start timers
@@ -166,6 +168,9 @@ PennChord::RecvMessage (Ptr<Socket> socket)
       case PennChordMessage::PING_RSP:
         ProcessPingRsp (message, sourceAddress, sourcePort);
         break;
+      case PennChordMessage::FIND_SUCCESSOR_REQ:
+        ProcessFindSuccessorReq(message);
+        break;
       default:
         ERROR_LOG ("Unknown Message Type!");
         break;
@@ -239,16 +244,71 @@ PennChord::ChordCreate()
   Ipv4Address selfIp = GetLocalAddress();
   m_predecessor = Ipv4Address::GetAny();
   m_successor = selfIp;
+  // might be unneccessary
   m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
 
   CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With IP: " << selfIp << " | Hash: " << m_nodeHash);
 }
 
-// void
-// PennChord::Join(Ipv4Address landmark)
-// {
-//   Ipv4Address selfIp = 
-// }
+void
+PennChord::Join(Ipv4Address landmark)
+{
+  Ipv4Address selfIp = GetLocalAddress();
+  uint32_t myId = PennKeyHelper::CreateShaKey(selfIp);
+
+  // packet overhead
+  uint32_t transactionId = GetNextTransactionId();
+  PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
+  msg.SetFindSuccessorReq(myId, selfIp);
+
+  // send packet
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(landmark, m_appPort));
+
+  CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
+}
+
+void
+PennChord::ProcessFindSuccessorReq(PennChordMessage message)
+{
+  PennChordMessage::FindSuccessorReq req = message.GetFindSuccessorReq();
+  uint32_t idToFind = req.idToFind;
+  Ipv4Address requestorIp = req.requestorIp;
+
+  // initialized in StartApplication
+  uint32_t selfId = m_nodeHash;
+  uint32_t successorId = PennKeyHelper::CreateShaKey(m_successor);
+
+  bool replyTriggered = false;
+
+  if (selfId < idToFind && idToFind <= successorId){
+    replyTriggered = true;
+  }
+
+  if (replyTriggered) {
+    //respond to requestor
+    uint32_t transactionId = message.GetTransactionId();
+    PennChordMessage resp = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_RSP, transactionId);
+    resp.SetFindSuccessorRsp(m_successor);
+
+    Ptr<Packet> packet = Create<Packet>();
+    packet->AddHeader(resp);
+    m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
+
+    CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
+  } 
+  else
+  {
+    // forward to successor
+    Ptr<Packet> packet = Create<Packet>();
+    packet->AddHeader(message);
+    m_socket->SendTo(packet, 0, InetSocketAddress(m_successor, m_appPort));
+
+    CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
+  }
+
+}
 
 uint32_t
 PennChord::GetNextTransactionId ()
