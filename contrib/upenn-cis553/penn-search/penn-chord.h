@@ -66,6 +66,7 @@ class PennChord : public PennApplication
     void Join(Ipv4Address landmark);
 
     void ProcessFindSuccessorReq (PennChordMessage message);
+    void ProcessFindSuccessorRsp (PennChordMessage message);
 
 
   protected:

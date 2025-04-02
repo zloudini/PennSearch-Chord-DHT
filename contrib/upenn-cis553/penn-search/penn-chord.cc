@@ -121,7 +121,13 @@ PennChord::ProcessCommand (std::vector<std::string> tokens)
     if (currentNode == landmarkNode){
       CHORD_LOG("Entering ChordCreate")
       ChordCreate();
-    } 
+    }
+    else
+    {
+      CHORD_LOG("Entering Join");
+      Ipv4Address landmarkIp = ResolveNodeIpAddress(landmarkNode);
+      Join(landmarkIp);
+    }
   }
 }
 
@@ -170,6 +176,9 @@ PennChord::RecvMessage (Ptr<Socket> socket)
         break;
       case PennChordMessage::FIND_SUCCESSOR_REQ:
         ProcessFindSuccessorReq(message);
+        break;
+      case PennChordMessage::FIND_SUCCESSOR_RSP:
+        ProcessFindSuccessorRsp(message);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -282,7 +291,7 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
   bool replyTriggered = false;
 
-  if (selfId < idToFind && idToFind <= successorId){
+  if (selfId < idToFind || idToFind <= successorId){
     replyTriggered = true;
   }
 
@@ -308,6 +317,17 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
   }
 
+}
+
+void
+PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
+{
+  PennChordMessage::FindSuccessorRsp rsp = message.GetFindSuccessorRsp();
+  Ipv4Address successorIp = rsp.successorIp;
+
+  m_successor = successorIp;
+
+  CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
 
 uint32_t
