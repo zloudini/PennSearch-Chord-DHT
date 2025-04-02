@@ -103,10 +103,25 @@ void
 PennChord::ProcessCommand (std::vector<std::string> tokens)
 {
   std::vector<std::string>::iterator iterator = tokens.begin();
+  // tokens for 0 PENNSEARCH CHORD JOIN 0 = [0, PENNSEARCH, CHORD, JOIN, 0]
   std::string command = *iterator;
+
+  if (command == "JOIN"){
+    iterator++;
+    std::string landmarkNode = *iterator;
+
+    CHORD_LOG("landmarkNode " << landmarkNode);
+
+    std::string currentNode = GetNodeId();
+
+    CHORD_LOG("currentNode " << currentNode);
+
+    if (currentNode == landmarkNode){
+      CHORD_LOG("Entering ChordCreate")
+      ChordCreate();
+    } 
+  }
 }
-
-
 
 void
 PennChord::SendPing (Ipv4Address destAddress, std::string pingMessage)
@@ -217,6 +232,23 @@ PennChord::AuditPings ()
   // Rechedule timer
   m_auditPingsTimer.Schedule (m_pingTimeout); 
 }
+
+void
+PennChord::ChordCreate()
+{
+  Ipv4Address selfIp = GetLocalAddress();
+  m_predecessor = Ipv4Address::GetAny();
+  m_successor = selfIp;
+  m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
+
+  CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With IP: " << selfIp << " | Hash: " << m_nodeHash);
+}
+
+// void
+// PennChord::Join(Ipv4Address landmark)
+// {
+//   Ipv4Address selfIp = 
+// }
 
 uint32_t
 PennChord::GetNextTransactionId ()

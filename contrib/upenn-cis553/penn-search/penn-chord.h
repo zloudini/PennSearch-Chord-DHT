@@ -62,6 +62,8 @@ class PennChord : public PennApplication
     
     
     // ---------------------------------------
+    void ChordCreate();
+    void Join(Ipv4Address landmark);
 
 
   protected:
@@ -84,6 +86,11 @@ class PennChord : public PennApplication
     Callback <void, Ipv4Address, std::string> m_pingSuccessFn;
     Callback <void, Ipv4Address, std::string> m_pingFailureFn;
     Callback <void, Ipv4Address, std::string> m_pingRecvFn;
+
+    // successor, predecessor, and nodeHash
+    Ipv4Address m_predecessor;
+    Ipv4Address m_successor;
+    uint32_t m_nodeHash;
 };
 
 #endif
