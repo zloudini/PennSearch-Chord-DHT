@@ -82,6 +82,9 @@ PennChord::StartApplication (void)
   m_auditPingsTimer.SetFunction (&PennChord::AuditPings, this);
   // Start timers
   m_auditPingsTimer.Schedule (m_pingTimeout);
+
+  m_stabilizeTimer.SetFunction(&PennChord::Stabilize, this);
+  m_stabilizeTimer.Schedule(Seconds(10));
 }
 
 void
@@ -105,7 +108,7 @@ void
 PennChord::ProcessCommand (std::vector<std::string> tokens)
 {
   std::vector<std::string>::iterator iterator = tokens.begin();
-  // tokens for 0 PENNSEARCH CHORD JOIN 0 = [0, PENNSEARCH, CHORD, JOIN, 0]
+  // tokens for 0 PENNSEARCH CHORD JOIN 0 = [JOIN, 0]
   std::string command = *iterator;
 
   if (command == "JOIN"){
@@ -179,6 +182,15 @@ PennChord::RecvMessage (Ptr<Socket> socket)
         break;
       case PennChordMessage::FIND_SUCCESSOR_RSP:
         ProcessFindSuccessorRsp(message);
+        break;
+      case PennChordMessage::STABILIZE_REQ:
+        ProcessStabilizeReq(message);
+        break;
+      case PennChordMessage::STABILIZE_RSP:
+        ProcessStabilizeRsp(message);
+        break;
+      case PennChordMessage::NOTIFY_PKT:
+        ProcessNotifcationPkt(message);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -329,6 +341,140 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
   CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
+
+void
+PennChord::Stabilize()
+{
+  Ipv4Address sender = GetLocalAddress();
+  Ipv4Address receiver = m_successor;
+
+  // packet overhead
+  uint32_t transactionId = GetNextTransactionId();
+  PennChordMessage msg = PennChordMessage(PennChordMessage::STABILIZE_REQ, transactionId);
+  msg.SetStabilizeReq(sender, receiver);
+
+  // send packet
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(receiver, m_appPort));
+
+  // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
+
+  m_stabilizeTimer.Schedule(Seconds(10));
+}
+
+bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end)
+{
+  if (start < end) {
+    return (start < target && target < end);
+  } else if (start > end) {
+    return (target > start || target < end);
+  } else if (target == end) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void
+PennChord::ProcessStabilizeReq(PennChordMessage message)
+{
+  PennChordMessage::StabilizeReq req = message.GetStabilizeReq();
+  Ipv4Address senderIp = req.sender;
+  Ipv4Address nodeToNotify = req.receiver;
+
+  uint32_t n = PennKeyHelper::CreateShaKey(senderIp);
+  uint32_t successor = m_nodeHash;
+
+  uint32_t x = PennKeyHelper::CreateShaKey(m_predecessor);
+
+  // if (x in (n, successor))
+  if(IsInBetween(n, x, successor)){
+    // if we enter here then the new node that is going to be notified in
+    // successor.notify(n) since we set successor = x if we enter here, and
+    // successor.predecessor is the node processing the Stabilization Request's
+    // predecessor
+
+    // TO BE USED
+    nodeToNotify = m_predecessor;
+
+    if (senderIp != GetLocalAddress()){
+      //create stabilizeRsp packet
+      Ipv4Address updated_successor = GetLocalAddress();
+
+      //packet overhead
+      uint32_t transactionId = GetNextTransactionId();
+      PennChordMessage msg = PennChordMessage(PennChordMessage::STABILIZE_RSP, transactionId);
+      msg.SetStabilizeRsp(updated_successor);
+      
+      // send packet back to node that sent the request
+      Ptr<Packet> pkt = Create<Packet>();
+      pkt->AddHeader(msg);
+      m_socket->SendTo(pkt, 0, InetSocketAddress(senderIp, m_appPort));
+
+      CHORD_LOG("Stabilize: Sent StabilizeRsp to " << ReverseLookup(senderIp) << " updating successor to: " << ReverseLookup(updated_successor));
+
+    } else {
+      m_successor = m_predecessor;
+    }
+  }
+
+  //successor.notify(sender)
+  // create notifyPkt
+  Ipv4Address newPredecessor = senderIp;
+
+  //packet overhead
+  uint32_t transactionId = GetNextTransactionId();
+  PennChordMessage msg = PennChordMessage(PennChordMessage::NOTIFY_PKT, transactionId);
+  msg.SetNotifyPkt(newPredecessor);
+
+  // send packet to node that needs to be notified
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(nodeToNotify, m_appPort));
+
+  CHORD_LOG("Notify: Sent NotifyPacket to " << ReverseLookup(nodeToNotify) << " for node " << ReverseLookup(newPredecessor))
+}
+
+void
+PennChord::ProcessStabilizeRsp(PennChordMessage message)
+{
+  PennChordMessage::StabilizeRsp msg = message.GetStabilizeRsp();
+
+  Ipv4Address newSuccessor = msg.sender;
+
+  if (m_successor != newSuccessor || m_successor == Ipv4Address::GetAny()){
+    
+    m_successor = newSuccessor;
+  }
+}
+
+
+void
+PennChord::ProcessNotifcationPkt(PennChordMessage message)
+{
+  PennChordMessage::NotifyPkt notification = message.GetNotifyPkt();
+  Ipv4Address updatePredecessor = notification.newPredecessor;
+  uint32_t nPrime = PennKeyHelper::CreateShaKey(updatePredecessor);
+
+  CHORD_LOG("Current Pred = " << ReverseLookup(m_predecessor));
+
+  if (m_predecessor == Ipv4Address::GetAny())
+  {
+    m_predecessor = updatePredecessor;
+    CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
+  }
+  else
+  {
+    uint32_t currentPredHash = PennKeyHelper::CreateShaKey(m_predecessor);
+    if (IsInBetween(currentPredHash, nPrime, m_nodeHash))
+    {
+      m_predecessor = updatePredecessor;
+      CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
+    }
+  }
+}
+
 
 uint32_t
 PennChord::GetNextTransactionId ()

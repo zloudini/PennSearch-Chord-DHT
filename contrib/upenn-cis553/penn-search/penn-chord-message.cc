@@ -72,6 +72,15 @@ PennChordMessage::GetSerializedSize (void) const
       case FIND_SUCCESSOR_RSP:
         size += m_message.findSuccessorRsp.GetSerializedSize ();
         break;
+      case STABILIZE_REQ:
+        size += m_message.stabilizeReq.GetSerializedSize ();
+        break;
+      case STABILIZE_RSP:
+        size += m_message.stabilizeRsp.GetSerializedSize ();
+        break;
+      case NOTIFY_PKT:
+        size += m_message.notifyPkt.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -100,6 +109,15 @@ PennChordMessage::Print (std::ostream &os) const
       case FIND_SUCCESSOR_RSP:
         m_message.findSuccessorRsp.Print (os);
         break;
+      case STABILIZE_REQ:
+        m_message.stabilizeReq.Print (os);
+        break;
+      case STABILIZE_RSP:
+        m_message.stabilizeRsp.Print (os);
+        break;
+      case NOTIFY_PKT:
+        m_message.notifyPkt.Print (os);
+        break;
       default:
         break;  
     }
@@ -126,6 +144,15 @@ PennChordMessage::Serialize (Buffer::Iterator start) const
         break;
       case FIND_SUCCESSOR_RSP:
         m_message.findSuccessorRsp.Serialize (i);
+        break;
+      case STABILIZE_REQ: 
+        m_message.stabilizeReq.Serialize (i);
+        break;
+      case STABILIZE_RSP: 
+        m_message.stabilizeRsp.Serialize (i);
+        break;
+      case NOTIFY_PKT:
+        m_message.notifyPkt.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -155,6 +182,15 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
         break;
       case FIND_SUCCESSOR_RSP:
         size += m_message.findSuccessorRsp.Deserialize (i);
+        break;
+      case STABILIZE_REQ: 
+        size += m_message.stabilizeReq.Deserialize (i);
+        break;
+      case STABILIZE_RSP:
+        size += m_message.stabilizeRsp.Deserialize (i);
+        break;
+      case NOTIFY_PKT:
+        size += m_message.notifyPkt.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -360,6 +396,153 @@ PennChordMessage::FindSuccessorRsp
 PennChordMessage::GetFindSuccessorRsp ()
 {
   return m_message.findSuccessorRsp;
+}
+
+
+/*StabilzeReq*/
+uint32_t 
+PennChordMessage::StabilizeReq::GetSerializedSize (void) const
+{
+  return IPV4_ADDRESS_SIZE + IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::StabilizeReq::Print (std::ostream &os) const
+{
+  os << "StabilizeReq: sender = " << sender << ", receiver = " << receiver << "\n";
+}
+
+void
+PennChordMessage::StabilizeReq::Serialize (Buffer::Iterator &start) const
+{
+  uint32_t senderIp = sender.Get();
+  start.WriteHtonU32(senderIp);
+  uint32_t receiverIp = receiver.Get();
+  start.WriteHtonU32(receiverIp);
+}
+
+uint32_t
+PennChordMessage::StabilizeReq::Deserialize (Buffer::Iterator &start)
+{ 
+  sender = Ipv4Address(start.ReadNtohU32());
+  receiver = Ipv4Address(start.ReadNtohU32());
+  return StabilizeReq::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetStabilizeReq (Ipv4Address sender, Ipv4Address receiver)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = STABILIZE_REQ;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == STABILIZE_REQ);
+    }
+  m_message.stabilizeReq.sender = sender;
+  m_message.stabilizeReq.receiver = receiver;
+}
+
+PennChordMessage::StabilizeReq
+PennChordMessage::GetStabilizeReq ()
+{
+  return m_message.stabilizeReq;
+}
+
+/*StabilzeRsp*/
+uint32_t 
+PennChordMessage::StabilizeRsp::GetSerializedSize (void) const
+{
+  return IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::StabilizeRsp::Print (std::ostream &os) const
+{
+  os << "StabilizeReq: sender = " << sender << "\n";
+}
+
+void
+PennChordMessage::StabilizeRsp::Serialize (Buffer::Iterator &start) const
+{
+  uint32_t senderIp = sender.Get();
+  start.WriteHtonU32(senderIp);
+}
+
+uint32_t
+PennChordMessage::StabilizeRsp::Deserialize (Buffer::Iterator &start)
+{ 
+  sender = Ipv4Address(start.ReadNtohU32());
+  return StabilizeRsp::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetStabilizeRsp (Ipv4Address sender)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = STABILIZE_RSP;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == STABILIZE_RSP);
+    }
+  m_message.stabilizeRsp.sender = sender;
+}
+
+PennChordMessage::StabilizeRsp
+PennChordMessage::GetStabilizeRsp ()
+{
+  return m_message.stabilizeRsp;
+}
+
+
+/*NotifyPkt*/
+uint32_t 
+PennChordMessage::NotifyPkt::GetSerializedSize (void) const
+{
+  return IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::NotifyPkt::Print (std::ostream &os) const
+{
+  os << "NotifyPkt: new predecessor = " << newPredecessor << "\n";
+}
+
+void
+PennChordMessage::NotifyPkt::Serialize (Buffer::Iterator &start) const
+{
+  uint32_t predecessor = newPredecessor.Get();
+  start.WriteHtonU32(predecessor);
+}
+
+uint32_t
+PennChordMessage::NotifyPkt::Deserialize (Buffer::Iterator &start)
+{ 
+  newPredecessor = Ipv4Address(start.ReadNtohU32());
+  return NotifyPkt::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetNotifyPkt (Ipv4Address newPredecessor)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = NOTIFY_PKT;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == NOTIFY_PKT);
+    }
+  m_message.notifyPkt.newPredecessor = newPredecessor;
+}
+
+PennChordMessage::NotifyPkt
+PennChordMessage::GetNotifyPkt ()
+{
+  return m_message.notifyPkt;
 }
 
 

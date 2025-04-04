@@ -39,6 +39,9 @@ class PennChordMessage : public Header
       // Define extra message types when needed
       FIND_SUCCESSOR_REQ = 3,
       FIND_SUCCESSOR_RSP = 4,
+      STABILIZE_REQ = 5,
+      STABILIZE_RSP = 6,
+      NOTIFY_PKT = 7,
     };
 
     PennChordMessage (PennChordMessage::MessageType messageType, uint32_t transactionId);
@@ -123,8 +126,39 @@ class PennChordMessage : public Header
 
       Ipv4Address successorIp;
     };
-    
-    
+
+    struct StabilizeReq
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender;
+      Ipv4Address receiver;
+    };
+
+    struct StabilizeRsp
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender;
+    };
+
+    struct NotifyPkt
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address newPredecessor;
+    };
+
+
 
   private:
     struct
@@ -133,6 +167,9 @@ class PennChordMessage : public Header
         PingRsp pingRsp;
         FindSuccessorReq findSuccessorReq;
         FindSuccessorRsp findSuccessorRsp;
+        StabilizeReq stabilizeReq;
+        StabilizeRsp stabilizeRsp;
+        NotifyPkt notifyPkt;
       } m_message;
     
   public:
@@ -163,6 +200,15 @@ class PennChordMessage : public Header
 
     void SetFindSuccessorRsp(Ipv4Address successorIp);
     FindSuccessorRsp GetFindSuccessorRsp();
+
+    void SetStabilizeReq(Ipv4Address sender, Ipv4Address recieiver);
+    StabilizeReq GetStabilizeReq();
+
+    void SetStabilizeRsp(Ipv4Address sender);
+    StabilizeRsp GetStabilizeRsp();
+
+    void SetNotifyPkt(Ipv4Address newPredecessor);
+    NotifyPkt GetNotifyPkt();
 
 
 }; // class PennChordMessage
