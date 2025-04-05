@@ -42,6 +42,7 @@ class PennChordMessage : public Header
       STABILIZE_REQ = 5,
       STABILIZE_RSP = 6,
       NOTIFY_PKT = 7,
+      RINGSTATE_PKT
     };
 
     PennChordMessage (PennChordMessage::MessageType messageType, uint32_t transactionId);
@@ -158,6 +159,15 @@ class PennChordMessage : public Header
       Ipv4Address newPredecessor;
     };
 
+    struct RingstatePkt
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address startingNodeAddr;
+    };
 
 
   private:
@@ -170,6 +180,7 @@ class PennChordMessage : public Header
         StabilizeReq stabilizeReq;
         StabilizeRsp stabilizeRsp;
         NotifyPkt notifyPkt;
+        RingstatePkt ringStatePkt;
       } m_message;
     
   public:
@@ -209,6 +220,9 @@ class PennChordMessage : public Header
 
     void SetNotifyPkt(Ipv4Address newPredecessor);
     NotifyPkt GetNotifyPkt();
+
+    void SetRingstatePkt(Ipv4Address startingNodeAddr);
+    RingstatePkt GetRingstatePkt();
 
 
 }; // class PennChordMessage

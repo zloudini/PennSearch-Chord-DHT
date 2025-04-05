@@ -77,6 +77,7 @@ PennChord::StartApplication (void)
     }  
   
   m_nodeHash = PennKeyHelper::CreateShaKey(GetLocalAddress());
+  m_predecessor = Ipv4Address::GetAny();
 
   // Configure timers
   m_auditPingsTimer.SetFunction (&PennChord::AuditPings, this);
@@ -84,7 +85,7 @@ PennChord::StartApplication (void)
   m_auditPingsTimer.Schedule (m_pingTimeout);
 
   m_stabilizeTimer.SetFunction(&PennChord::Stabilize, this);
-  m_stabilizeTimer.Schedule(Seconds(10));
+  m_stabilizeTimer.Schedule(Seconds(5));
 }
 
 void
@@ -115,7 +116,7 @@ PennChord::ProcessCommand (std::vector<std::string> tokens)
     iterator++;
     std::string landmarkNode = *iterator;
 
-    CHORD_LOG("landmarkNode " << landmarkNode);
+    CHORD_LOG("Joining on node " << landmarkNode);
 
     std::string currentNode = GetNodeId();
 
@@ -268,7 +269,7 @@ PennChord::ChordCreate()
   // might be unneccessary
   m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
 
-  CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With IP: " << selfIp << " | Hash: " << m_nodeHash);
+  CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
 }
 
 void
@@ -303,7 +304,7 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
   bool replyTriggered = false;
 
-  if (selfId < idToFind || idToFind <= successorId){
+  if (IsInBetween(idToFind, selfId, successorId) || selfId == successorId){
     replyTriggered = true;
   }
 
@@ -360,7 +361,7 @@ PennChord::Stabilize()
 
   // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
 
-  m_stabilizeTimer.Schedule(Seconds(10));
+  m_stabilizeTimer.Schedule(Seconds(2));
 }
 
 bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end)
@@ -369,7 +370,7 @@ bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end)
     return (start < target && target < end);
   } else if (start > end) {
     return (target > start || target < end);
-  } else if (target == end) {
+  } else if (start == end) {
     return true;
   } else {
     return false;
@@ -389,18 +390,17 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
   uint32_t x = PennKeyHelper::CreateShaKey(m_predecessor);
 
   // if (x in (n, successor))
-  if(IsInBetween(n, x, successor)){
+  if(IsInBetween(n, x, successor) && x != PennKeyHelper::CreateShaKey(Ipv4Address::GetAny())){
     // if we enter here then the new node that is going to be notified in
     // successor.notify(n) since we set successor = x if we enter here, and
     // successor.predecessor is the node processing the Stabilization Request's
     // predecessor
 
-    // TO BE USED
-    nodeToNotify = m_predecessor;
-
-    if (senderIp != GetLocalAddress()){
+    if (senderIp != GetLocalAddress() && m_predecessor != Ipv4Address::GetAny()){
       //create stabilizeRsp packet
-      Ipv4Address updated_successor = GetLocalAddress();
+      nodeToNotify = m_predecessor;
+      Ipv4Address updated_successor = m_predecessor;
+      // CHORD_LOG("Setting updated_successor = " << updated_successor);
 
       //packet overhead
       uint32_t transactionId = GetNextTransactionId();
@@ -433,7 +433,7 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(nodeToNotify, m_appPort));
 
-  CHORD_LOG("Notify: Sent NotifyPacket to " << ReverseLookup(nodeToNotify) << " for node " << ReverseLookup(newPredecessor))
+  // CHORD_LOG("Notify: Sent NotifyPacket to " << ReverseLookup(nodeToNotify) << " for node " << ReverseLookup(newPredecessor))
 }
 
 void
@@ -443,7 +443,11 @@ PennChord::ProcessStabilizeRsp(PennChordMessage message)
 
   Ipv4Address newSuccessor = msg.sender;
 
-  if (m_successor != newSuccessor || m_successor == Ipv4Address::GetAny()){
+  // CHORD_LOG("StabilizeRsp: " << ReverseLookup(GetLocalAddress()) << " got STABILIZE_RSP to update successor to: " << newSuccessor);
+
+  if (newSuccessor != Ipv4Address::GetAny() && (m_successor != newSuccessor || m_successor == Ipv4Address::GetAny())){
+
+    CHORD_LOG("StabilizeRsp: Updating successor from " << ReverseLookup(m_successor) << " to " << ReverseLookup(newSuccessor));
     
     m_successor = newSuccessor;
   }
@@ -457,7 +461,8 @@ PennChord::ProcessNotifcationPkt(PennChordMessage message)
   Ipv4Address updatePredecessor = notification.newPredecessor;
   uint32_t nPrime = PennKeyHelper::CreateShaKey(updatePredecessor);
 
-  CHORD_LOG("Current Pred = " << ReverseLookup(m_predecessor));
+  // CHORD_LOG("Notify Packet recieved from " << ReverseLookup(updatePredecessor));
+  // CHORD_LOG("Current Pred = " << ReverseLookup(m_predecessor));
 
   if (m_predecessor == Ipv4Address::GetAny())
   {
@@ -467,7 +472,15 @@ PennChord::ProcessNotifcationPkt(PennChordMessage message)
   else
   {
     uint32_t currentPredHash = PennKeyHelper::CreateShaKey(m_predecessor);
-    if (IsInBetween(currentPredHash, nPrime, m_nodeHash))
+
+    // CHORD_LOG("Self = " << ReverseLookup(GetLocalAddress())
+    //        << " | Current Pred = " << ReverseLookup(m_predecessor)
+    //        << " | Update Pred = " << ReverseLookup(updatePredecessor));
+
+    // CHORD_LOG("Self = " << ReverseLookup(GetLocalAddress())
+    //        << " | Current Successor = " << ReverseLookup(m_successor));
+
+    if (IsInBetween(currentPredHash, nPrime, m_nodeHash) && currentPredHash != PennKeyHelper::CreateShaKey(updatePredecessor))
     {
       m_predecessor = updatePredecessor;
       CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
