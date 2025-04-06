@@ -355,10 +355,6 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
   m_successor = successorIp;
 
-  if (GetLocalAddress() == Ipv4Address("10.0.22.2")) {
-    CHORD_LOG("Node is with successor " << m_successor);
-  }
-
   //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
 
