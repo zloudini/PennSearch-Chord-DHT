@@ -84,6 +84,12 @@ PennChordMessage::GetSerializedSize (void) const
       case RINGSTATE_PKT:
         size += m_message.ringStatePkt.GetSerializedSize();
         break;
+      case LEAVE_SUCCESSOR:
+        size += m_message.leaveSuccessor.GetSerializedSize();
+        break;
+      case LEAVE_PREDECESSOR:
+        size += m_message.leavePrededecessor.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -124,6 +130,12 @@ PennChordMessage::Print (std::ostream &os) const
       case RINGSTATE_PKT:
         m_message.ringStatePkt.Print (os);
         break;
+      case LEAVE_SUCCESSOR:
+        m_message.leaveSuccessor.Print (os);
+        break;
+      case LEAVE_PREDECESSOR:
+        m_message.leavePrededecessor.Print (os);
+        break;
       default:
         break;  
     }
@@ -162,6 +174,12 @@ PennChordMessage::Serialize (Buffer::Iterator start) const
         break;
       case RINGSTATE_PKT:
         m_message.ringStatePkt.Serialize (i);
+        break;
+      case LEAVE_SUCCESSOR:
+        m_message.leaveSuccessor.Serialize (i);
+        break;
+      case LEAVE_PREDECESSOR:
+        m_message.leavePrededecessor.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -203,6 +221,12 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
         break;
       case RINGSTATE_PKT:
         size += m_message.ringStatePkt.Deserialize (i);
+        break;
+      case LEAVE_SUCCESSOR:
+        size += m_message.leaveSuccessor.Deserialize (i);
+        break;
+      case LEAVE_PREDECESSOR:
+        size += m_message.leavePrededecessor.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -603,6 +627,112 @@ PennChordMessage::RingstatePkt
 PennChordMessage::GetRingstatePkt ()
 {
   return m_message.ringStatePkt;
+}
+
+/*LeaveSuccessor*/
+uint32_t 
+PennChordMessage::LeaveSuccessor::GetSerializedSize (void) const
+{
+  return IPV4_ADDRESS_SIZE + IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::LeaveSuccessor::Print (std::ostream &os) const
+{
+  os << "LeaveSuccessor updating predecessor of successor to = " <<  newPred << "\n";
+}
+
+void
+PennChordMessage::LeaveSuccessor::Serialize (Buffer::Iterator &start) const
+{
+  uint32_t ip = sender.Get();
+  start.WriteHtonU32(ip);
+  uint32_t newPredIp = newPred.Get();
+  start.WriteHtonU32(newPredIp);
+}
+
+uint32_t
+PennChordMessage::LeaveSuccessor::Deserialize (Buffer::Iterator &start)
+{ 
+  // read id to find
+  sender = Ipv4Address(start.ReadNtohU32());
+  // read in ip of requestor
+  newPred = Ipv4Address(start.ReadNtohU32());
+  return LeaveSuccessor::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetLeaveSuccessor(Ipv4Address sender, Ipv4Address newPred)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = LEAVE_SUCCESSOR;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == LEAVE_SUCCESSOR);
+    }
+  m_message.leaveSuccessor.sender = sender;
+  m_message.leaveSuccessor.newPred = newPred;
+}
+
+PennChordMessage::LeaveSuccessor
+PennChordMessage::GetLeaveSuccessor ()
+{
+  return m_message.leaveSuccessor;
+}
+
+/*LeavePredecessor*/
+uint32_t 
+PennChordMessage::LeavePredecessor::GetSerializedSize (void) const
+{
+  return IPV4_ADDRESS_SIZE + IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::LeavePredecessor::Print (std::ostream &os) const
+{
+  os << "LeaveSuccessor updating successor of predecessor to = " <<  newSucc << "\n";
+}
+
+void
+PennChordMessage::LeavePredecessor::Serialize (Buffer::Iterator &start) const
+{
+  uint32_t ip = sender.Get();
+  start.WriteHtonU32(ip);
+  uint32_t newPredIp = newSucc.Get();
+  start.WriteHtonU32(newPredIp);
+}
+
+uint32_t
+PennChordMessage::LeavePredecessor::Deserialize (Buffer::Iterator &start)
+{ 
+  // read id to find
+  sender = Ipv4Address(start.ReadNtohU32());
+  // read in ip of requestor
+  newSucc = Ipv4Address(start.ReadNtohU32());
+  return LeavePredecessor::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetLeavePredecessor(Ipv4Address sender, Ipv4Address newSucc)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = LEAVE_PREDECESSOR;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == LEAVE_PREDECESSOR);
+    }
+  m_message.leavePrededecessor.sender = sender;
+  m_message.leavePrededecessor.newSucc = newSucc;
+}
+
+PennChordMessage::LeavePredecessor
+PennChordMessage::GetLeavePredecessor ()
+{
+  return m_message.leavePrededecessor;
 }
 
 void

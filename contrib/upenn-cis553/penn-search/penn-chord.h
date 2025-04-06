@@ -77,6 +77,10 @@ class PennChord : public PennApplication
     void RingState();
     void ProcessRingStatePtk(PennChordMessage message);
 
+    void Leave();
+    void ProcessLeaveSuccessor(PennChordMessage message);
+    void ProcessLeavePredecessor(PennChordMessage message);
+
   protected:
     virtual void DoDispose ();
     

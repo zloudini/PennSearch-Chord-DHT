@@ -43,6 +43,8 @@ class PennChordMessage : public Header
       STABILIZE_RSP = 6,
       NOTIFY_PKT = 7,
       RINGSTATE_PKT = 8,
+      LEAVE_SUCCESSOR = 9,
+      LEAVE_PREDECESSOR = 10,
     };
 
     PennChordMessage (PennChordMessage::MessageType messageType, uint32_t transactionId);
@@ -169,6 +171,27 @@ class PennChordMessage : public Header
       Ipv4Address endRingState;
     };
 
+    struct LeaveSuccessor
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender; 
+      Ipv4Address newPred;
+    };
+
+    struct LeavePredecessor
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender; 
+      Ipv4Address newSucc;
+    };
 
   private:
     struct
@@ -181,6 +204,8 @@ class PennChordMessage : public Header
         StabilizeRsp stabilizeRsp;
         NotifyPkt notifyPkt;
         RingstatePkt ringStatePkt;
+        LeaveSuccessor leaveSuccessor;
+        LeavePredecessor leavePrededecessor;
       } m_message;
     
   public:
@@ -223,6 +248,12 @@ class PennChordMessage : public Header
 
     void SetRingstatePkt(Ipv4Address endRingState);
     RingstatePkt GetRingstatePkt();
+
+    void SetLeaveSuccessor(Ipv4Address sender, Ipv4Address newPred);
+    LeaveSuccessor GetLeaveSuccessor();
+    
+    void SetLeavePredecessor(Ipv4Address sender, Ipv4Address newSucc);
+    LeavePredecessor GetLeavePredecessor();
 
 
 }; // class PennChordMessage

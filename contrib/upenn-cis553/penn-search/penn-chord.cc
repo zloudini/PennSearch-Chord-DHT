@@ -85,7 +85,7 @@ PennChord::StartApplication (void)
   m_auditPingsTimer.Schedule (m_pingTimeout);
 
   m_stabilizeTimer.SetFunction(&PennChord::Stabilize, this);
-  m_stabilizeTimer.Schedule(Seconds(5));
+  m_stabilizeTimer.Schedule(Seconds(2));
 }
 
 void
@@ -103,6 +103,8 @@ PennChord::StopApplication (void)
   m_auditPingsTimer.Cancel ();
 
   m_pingTracker.clear ();
+
+  m_stabilizeTimer.Cancel ();
 }
 
 void
@@ -134,7 +136,9 @@ PennChord::ProcessCommand (std::vector<std::string> tokens)
     }
   } else if (command == "RINGSTATE"){
     RingState();
-  }
+  } else if (command == "LEAVE"){
+    Leave();
+  } 
 }
 
 void
@@ -197,6 +201,12 @@ PennChord::RecvMessage (Ptr<Socket> socket)
         break;
       case PennChordMessage::RINGSTATE_PKT:
         ProcessRingStatePtk(message);
+        break;
+      case PennChordMessage::LEAVE_SUCCESSOR:
+        ProcessLeaveSuccessor(message);
+        break;
+      case PennChordMessage::LEAVE_PREDECESSOR:
+        ProcessLeavePredecessor(message);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -562,6 +572,65 @@ PennChord::ProcessRingStatePtk(PennChordMessage message)
   }
 }
 
+void
+PennChord::Leave()
+{
+  CHORD_LOG(ReverseLookup(GetLocalAddress()) << " leaving the chord");
+
+  CHORD_LOG("Sending my current predecessor: " << m_predecessor << " to " << m_successor);
+  // send packet to current successor, update the successor with this node's predecessor
+  //packet overhead
+  uint32_t transactionId = GetNextTransactionId();
+  PennChordMessage msg = PennChordMessage(PennChordMessage::LEAVE_SUCCESSOR, transactionId);
+  msg.SetLeaveSuccessor(GetLocalAddress(), m_predecessor);
+
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
+
+  CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
+  // send pack to current predecessor, update the predecessor with this node's successor
+  //packet overhead
+  uint32_t transactionId2 = GetNextTransactionId();
+  PennChordMessage msg2 = PennChordMessage(PennChordMessage::LEAVE_PREDECESSOR, transactionId2);
+  msg2.SetLeavePredecessor(GetLocalAddress(), m_successor);
+
+  Ptr<Packet> pkt2 = Create<Packet>();
+  pkt2->AddHeader(msg2);
+  m_socket->SendTo(pkt2, 0, InetSocketAddress(m_predecessor, m_appPort));
+
+  StopApplication();
+}
+
+void
+PennChord::ProcessLeaveSuccessor(PennChordMessage message)
+{
+  PennChordMessage::LeaveSuccessor msg = message.GetLeaveSuccessor();
+  Ipv4Address newPredecessor = msg.newPred;
+  Ipv4Address sender = msg.sender;
+
+  CHORD_LOG("Received leave request from my predecessor " << ReverseLookup(sender) << " updating my predecessor to " << ReverseLookup(newPredecessor));
+
+  if (sender == m_predecessor) {
+    m_predecessor = newPredecessor;
+  }
+
+}
+
+void
+PennChord::ProcessLeavePredecessor(PennChordMessage message)
+{
+  PennChordMessage::LeavePredecessor msg = message.GetLeavePredecessor();
+  Ipv4Address newSuccessor = msg.newSucc;
+  Ipv4Address sender = msg.sender;
+
+  CHORD_LOG("Received leave request from my successor " << ReverseLookup(sender) << " updating my sucessor to " << ReverseLookup(newSuccessor));
+
+  if (sender == m_successor) {
+    m_successor = newSuccessor;
+  }
+
+}
 
 uint32_t
 PennChord::GetNextTransactionId ()
