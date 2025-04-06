@@ -355,6 +355,10 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
   m_successor = successorIp;
 
+  if (GetLocalAddress() == Ipv4Address("10.0.22.2")) {
+    CHORD_LOG("Node is with successor " << m_successor);
+  }
+
   //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
 
@@ -376,7 +380,7 @@ PennChord::Stabilize()
 
   // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
 
-  m_stabilizeTimer.Schedule(Seconds(2));
+  m_stabilizeTimer.Schedule(Seconds(1));
 }
 
 bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end)
@@ -524,7 +528,7 @@ PennChord::RingState()
   uint32_t transactionId = GetNextTransactionId();
   PennChordMessage msg = PennChordMessage(PennChordMessage::RINGSTATE_PKT, transactionId);
   // CHORD_LOG("Created msg with type = " << msg.GetMessageType());
-  msg.SetRingstatePkt(predIp);
+  msg.SetRingstatePkt(localIp);
 
   // send packet to node that needs to be notified
   Ptr<Packet> pkt = Create<Packet>();
@@ -542,25 +546,27 @@ PennChord::ProcessRingStatePtk(PennChordMessage message)
 
   // CHORD_LOG("Received RingState packet at node " << ReverseLookup(GetLocalAddress()));
 
-  Ipv4Address localIp = GetLocalAddress();
-  std::string localId = ReverseLookup(localIp);
-  uint32_t localHash = m_nodeHash;
-
-  Ipv4Address predIp = m_predecessor;
-  std::string predId = ReverseLookup(predIp);
-  uint32_t predHash = PennKeyHelper::CreateShaKey(predIp);
-
-  Ipv4Address succIp = m_successor;
-  std::string succId = ReverseLookup(succIp);
-  uint32_t succHash = PennKeyHelper::CreateShaKey(succIp);
-
-  GraderLogs::RingState(localIp, localId, localHash, predIp, predId, predHash, succIp, succId, succHash);
+  
 
   if (ringStateEnd == GetLocalAddress())
   {
     GraderLogs::EndOfRingState();
   } else 
   {
+
+    Ipv4Address localIp = GetLocalAddress();
+    std::string localId = ReverseLookup(localIp);
+    uint32_t localHash = m_nodeHash;
+
+    Ipv4Address predIp = m_predecessor;
+    std::string predId = ReverseLookup(predIp);
+    uint32_t predHash = PennKeyHelper::CreateShaKey(predIp);
+
+    Ipv4Address succIp = m_successor;
+    std::string succId = ReverseLookup(succIp);
+    uint32_t succHash = PennKeyHelper::CreateShaKey(succIp);
+
+    GraderLogs::RingState(localIp, localId, localHash, predIp, predId, predHash, succIp, succId, succHash);
     //packet overhead
     uint32_t transactionId = GetNextTransactionId();
     PennChordMessage msg = PennChordMessage(PennChordMessage::RINGSTATE_PKT, transactionId);
