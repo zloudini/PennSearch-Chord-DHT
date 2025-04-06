@@ -81,6 +81,9 @@ PennChordMessage::GetSerializedSize (void) const
       case NOTIFY_PKT:
         size += m_message.notifyPkt.GetSerializedSize();
         break;
+      case RINGSTATE_PKT:
+        size += m_message.ringStatePkt.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -118,6 +121,9 @@ PennChordMessage::Print (std::ostream &os) const
       case NOTIFY_PKT:
         m_message.notifyPkt.Print (os);
         break;
+      case RINGSTATE_PKT:
+        m_message.ringStatePkt.Print (os);
+        break;
       default:
         break;  
     }
@@ -153,6 +159,9 @@ PennChordMessage::Serialize (Buffer::Iterator start) const
         break;
       case NOTIFY_PKT:
         m_message.notifyPkt.Serialize (i);
+        break;
+      case RINGSTATE_PKT:
+        m_message.ringStatePkt.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -191,6 +200,9 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
         break;
       case NOTIFY_PKT:
         size += m_message.notifyPkt.Deserialize (i);
+        break;
+      case RINGSTATE_PKT:
+        size += m_message.ringStatePkt.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -545,6 +557,53 @@ PennChordMessage::GetNotifyPkt ()
   return m_message.notifyPkt;
 }
 
+/*RingstatePkt*/
+uint32_t 
+PennChordMessage::RingstatePkt::GetSerializedSize (void) const
+{
+  return IPV4_ADDRESS_SIZE;
+}
+
+void
+PennChordMessage::RingstatePkt::Print (std::ostream &os) const
+{
+  os << "RingstatePkt: endRingState =  " << endRingState << "\n";
+}
+
+void
+PennChordMessage::RingstatePkt::Serialize (Buffer::Iterator &start) const
+{
+  
+  uint32_t endingNode = endRingState.Get();
+  start.WriteHtonU32(endingNode);
+}
+
+uint32_t
+PennChordMessage::RingstatePkt::Deserialize (Buffer::Iterator &start)
+{ 
+  endRingState = Ipv4Address(start.ReadNtohU32());
+  return RingstatePkt::GetSerializedSize ();
+}
+
+void
+PennChordMessage::SetRingstatePkt (Ipv4Address endRingState)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = RINGSTATE_PKT;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == RINGSTATE_PKT);
+    }
+  m_message.ringStatePkt.endRingState = endRingState;
+}
+
+PennChordMessage::RingstatePkt
+PennChordMessage::GetRingstatePkt ()
+{
+  return m_message.ringStatePkt;
+}
 
 void
 PennChordMessage::SetMessageType (MessageType messageType)

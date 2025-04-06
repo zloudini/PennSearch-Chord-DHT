@@ -116,22 +116,24 @@ PennChord::ProcessCommand (std::vector<std::string> tokens)
     iterator++;
     std::string landmarkNode = *iterator;
 
-    CHORD_LOG("Joining on node " << landmarkNode);
+    //CHORD_LOG("Joining on node " << landmarkNode);
 
     std::string currentNode = GetNodeId();
 
-    CHORD_LOG("currentNode " << currentNode);
+    //CHORD_LOG("currentNode " << currentNode);
 
     if (currentNode == landmarkNode){
-      CHORD_LOG("Entering ChordCreate")
+      //CHORD_LOG("Entering ChordCreate")
       ChordCreate();
     }
     else
     {
-      CHORD_LOG("Entering Join");
+      //CHORD_LOG("Entering Join");
       Ipv4Address landmarkIp = ResolveNodeIpAddress(landmarkNode);
       Join(landmarkIp);
     }
+  } else if (command == "RINGSTATE"){
+    RingState();
   }
 }
 
@@ -192,6 +194,9 @@ PennChord::RecvMessage (Ptr<Socket> socket)
         break;
       case PennChordMessage::NOTIFY_PKT:
         ProcessNotifcationPkt(message);
+        break;
+      case PennChordMessage::RINGSTATE_PKT:
+        ProcessRingStatePtk(message);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -269,7 +274,7 @@ PennChord::ChordCreate()
   // might be unneccessary
   m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
 
-  CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
+  //("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
 }
 
 void
@@ -288,7 +293,7 @@ PennChord::Join(Ipv4Address landmark)
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(landmark, m_appPort));
 
-  CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
+  //CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
 }
 
 void
@@ -318,7 +323,7 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     packet->AddHeader(resp);
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
 
-    CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
+    //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
   else
   {
@@ -327,7 +332,7 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     packet->AddHeader(message);
     m_socket->SendTo(packet, 0, InetSocketAddress(m_successor, m_appPort));
 
-    CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
+    //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
   }
 
 }
@@ -340,7 +345,7 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
   m_successor = successorIp;
 
-  CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
+  //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
 
 void
@@ -412,7 +417,7 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
       pkt->AddHeader(msg);
       m_socket->SendTo(pkt, 0, InetSocketAddress(senderIp, m_appPort));
 
-      CHORD_LOG("Stabilize: Sent StabilizeRsp to " << ReverseLookup(senderIp) << " updating successor to: " << ReverseLookup(updated_successor));
+      //CHORD_LOG("Stabilize: Sent StabilizeRsp to " << ReverseLookup(senderIp) << " updating successor to: " << ReverseLookup(updated_successor));
 
     } else {
       m_successor = m_predecessor;
@@ -447,7 +452,7 @@ PennChord::ProcessStabilizeRsp(PennChordMessage message)
 
   if (newSuccessor != Ipv4Address::GetAny() && (m_successor != newSuccessor || m_successor == Ipv4Address::GetAny())){
 
-    CHORD_LOG("StabilizeRsp: Updating successor from " << ReverseLookup(m_successor) << " to " << ReverseLookup(newSuccessor));
+    // CHORD_LOG("StabilizeRsp: Updating successor from " << ReverseLookup(m_successor) << " to " << ReverseLookup(newSuccessor));
     
     m_successor = newSuccessor;
   }
@@ -467,7 +472,7 @@ PennChord::ProcessNotifcationPkt(PennChordMessage message)
   if (m_predecessor == Ipv4Address::GetAny())
   {
     m_predecessor = updatePredecessor;
-    CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
+    // CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
   }
   else
   {
@@ -483,8 +488,77 @@ PennChord::ProcessNotifcationPkt(PennChordMessage message)
     if (IsInBetween(currentPredHash, nPrime, m_nodeHash) && currentPredHash != PennKeyHelper::CreateShaKey(updatePredecessor))
     {
       m_predecessor = updatePredecessor;
-      CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
+      // CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
     }
+  }
+}
+
+void
+PennChord::RingState()
+{
+  Ipv4Address localIp = GetLocalAddress();
+  std::string localId = ReverseLookup(localIp);
+  uint32_t localHash = m_nodeHash;
+
+  Ipv4Address predIp = m_predecessor;
+  std::string predId = ReverseLookup(predIp);
+  uint32_t predHash = PennKeyHelper::CreateShaKey(predIp);
+
+  Ipv4Address succIp = m_successor;
+  std::string succId = ReverseLookup(succIp);
+  uint32_t succHash = PennKeyHelper::CreateShaKey(succIp);
+
+  GraderLogs::RingState(localIp, localId, localHash, predIp, predId, predHash, succIp, succId, succHash);
+
+  //packet overhead
+  uint32_t transactionId = GetNextTransactionId();
+  PennChordMessage msg = PennChordMessage(PennChordMessage::RINGSTATE_PKT, transactionId);
+  // CHORD_LOG("Created msg with type = " << msg.GetMessageType());
+  msg.SetRingstatePkt(predIp);
+
+  // send packet to node that needs to be notified
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(succIp, m_appPort));
+  // CHORD_LOG("SENDING RINGSTATE TO: " << ReverseLookup(succIp));
+}
+
+void
+PennChord::ProcessRingStatePtk(PennChordMessage message)
+{
+
+  PennChordMessage::RingstatePkt mssg = message.GetRingstatePkt();
+  Ipv4Address ringStateEnd = mssg.endRingState;
+
+  // CHORD_LOG("Received RingState packet at node " << ReverseLookup(GetLocalAddress()));
+
+  Ipv4Address localIp = GetLocalAddress();
+  std::string localId = ReverseLookup(localIp);
+  uint32_t localHash = m_nodeHash;
+
+  Ipv4Address predIp = m_predecessor;
+  std::string predId = ReverseLookup(predIp);
+  uint32_t predHash = PennKeyHelper::CreateShaKey(predIp);
+
+  Ipv4Address succIp = m_successor;
+  std::string succId = ReverseLookup(succIp);
+  uint32_t succHash = PennKeyHelper::CreateShaKey(succIp);
+
+  GraderLogs::RingState(localIp, localId, localHash, predIp, predId, predHash, succIp, succId, succHash);
+
+  if (ringStateEnd == GetLocalAddress())
+  {
+    GraderLogs::EndOfRingState();
+  } else 
+  {
+    //packet overhead
+    uint32_t transactionId = GetNextTransactionId();
+    PennChordMessage msg = PennChordMessage(PennChordMessage::RINGSTATE_PKT, transactionId);
+    msg.SetRingstatePkt(ringStateEnd);
+
+    Ptr<Packet> pkt = Create<Packet>();
+    pkt->AddHeader(msg);
+    m_socket->SendTo(pkt, 0, InetSocketAddress(succIp, m_appPort));
   }
 }
 
