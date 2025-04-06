@@ -575,9 +575,9 @@ PennChord::ProcessRingStatePtk(PennChordMessage message)
 void
 PennChord::Leave()
 {
-  CHORD_LOG(ReverseLookup(GetLocalAddress()) << " leaving the chord");
+  //CHORD_LOG(ReverseLookup(GetLocalAddress()) << " leaving the chord");
 
-  CHORD_LOG("Sending my current predecessor: " << m_predecessor << " to " << m_successor);
+  // CHORD_LOG("Sending my current predecessor: " << m_predecessor << " to " << m_successor);
   // send packet to current successor, update the successor with this node's predecessor
   //packet overhead
   uint32_t transactionId = GetNextTransactionId();
@@ -588,7 +588,7 @@ PennChord::Leave()
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
-  CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
+  // CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
   // send pack to current predecessor, update the predecessor with this node's successor
   //packet overhead
   uint32_t transactionId2 = GetNextTransactionId();
@@ -609,7 +609,7 @@ PennChord::ProcessLeaveSuccessor(PennChordMessage message)
   Ipv4Address newPredecessor = msg.newPred;
   Ipv4Address sender = msg.sender;
 
-  CHORD_LOG("Received leave request from my predecessor " << ReverseLookup(sender) << " updating my predecessor to " << ReverseLookup(newPredecessor));
+  //CHORD_LOG("Received leave request from my predecessor " << ReverseLookup(sender) << " updating my predecessor to " << ReverseLookup(newPredecessor));
 
   if (sender == m_predecessor) {
     m_predecessor = newPredecessor;
@@ -624,7 +624,7 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
   Ipv4Address newSuccessor = msg.newSucc;
   Ipv4Address sender = msg.sender;
 
-  CHORD_LOG("Received leave request from my successor " << ReverseLookup(sender) << " updating my sucessor to " << ReverseLookup(newSuccessor));
+  //CHORD_LOG("Received leave request from my successor " << ReverseLookup(sender) << " updating my sucessor to " << ReverseLookup(newSuccessor));
 
   if (sender == m_successor) {
     m_successor = newSuccessor;
