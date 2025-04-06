@@ -303,7 +303,7 @@ PennChord::Join(Ipv4Address landmark)
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(landmark, m_appPort));
 
-  CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
+  //CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
 }
 
 void
@@ -333,7 +333,7 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     packet->AddHeader(resp);
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
 
-    CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
+    //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
   else
   {
@@ -575,9 +575,9 @@ PennChord::ProcessRingStatePtk(PennChordMessage message)
 void
 PennChord::Leave()
 {
-  CHORD_LOG(ReverseLookup(GetLocalAddress()) << " leaving the chord");
+  //CHORD_LOG(ReverseLookup(GetLocalAddress()) << " leaving the chord");
 
-  CHORD_LOG("Sending my current predecessor: " << m_predecessor << " to " << m_successor);
+  //CHORD_LOG("Sending my current predecessor: " << m_predecessor << " to " << m_successor);
   // send packet to current successor, update the successor with this node's predecessor
   //packet overhead
   uint32_t transactionId = GetNextTransactionId();
@@ -588,7 +588,7 @@ PennChord::Leave()
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
-  CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
+  //CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
   // send pack to current predecessor, update the predecessor with this node's successor
   //packet overhead
   uint32_t transactionId2 = GetNextTransactionId();
