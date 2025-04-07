@@ -73,7 +73,7 @@ PennSearch::DoDispose ()
   PennApplication::DoDispose ();
   
   // FOR TESTING
-  GraderLogs::HelloGrader(ReverseLookup(GetLocalAddress()), GetLocalAddress());
+  // GraderLogs::HelloGrader(ReverseLookup(GetLocalAddress()), GetLocalAddress());
 }
 
 void

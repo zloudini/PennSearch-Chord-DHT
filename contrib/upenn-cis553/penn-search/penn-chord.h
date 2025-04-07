@@ -62,7 +62,24 @@ class PennChord : public PennApplication
     
     
     // ---------------------------------------
+    void ChordCreate();
+    void Join(Ipv4Address landmark);
+    void ProcessFindSuccessorReq (PennChordMessage message);
+    void ProcessFindSuccessorRsp (PennChordMessage message);
 
+    void Stabilize();
+    void ProcessStabilizeReq(PennChordMessage message);
+    void ProcessStabilizeRsp(PennChordMessage message);
+    bool IsInBetween(uint32_t start, uint32_t target, uint32_t end);
+
+    void ProcessNotifcationPkt(PennChordMessage message);
+
+    void RingState();
+    void ProcessRingStatePtk(PennChordMessage message);
+
+    void Leave();
+    void ProcessLeaveSuccessor(PennChordMessage message);
+    void ProcessLeavePredecessor(PennChordMessage message);
 
   protected:
     virtual void DoDispose ();
@@ -84,6 +101,13 @@ class PennChord : public PennApplication
     Callback <void, Ipv4Address, std::string> m_pingSuccessFn;
     Callback <void, Ipv4Address, std::string> m_pingFailureFn;
     Callback <void, Ipv4Address, std::string> m_pingRecvFn;
+
+    // successor, predecessor, and nodeHash
+    Ipv4Address m_predecessor;
+    Ipv4Address m_successor;
+    uint32_t m_nodeHash;
+
+    Timer m_stabilizeTimer;
 };
 
 #endif

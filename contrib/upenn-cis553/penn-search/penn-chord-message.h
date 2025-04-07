@@ -37,6 +37,14 @@ class PennChordMessage : public Header
       PING_REQ = 1,
       PING_RSP = 2,
       // Define extra message types when needed
+      FIND_SUCCESSOR_REQ = 3,
+      FIND_SUCCESSOR_RSP = 4,
+      STABILIZE_REQ = 5,
+      STABILIZE_RSP = 6,
+      NOTIFY_PKT = 7,
+      RINGSTATE_PKT = 8,
+      LEAVE_SUCCESSOR = 9,
+      LEAVE_PREDECESSOR = 10,
     };
 
     PennChordMessage (PennChordMessage::MessageType messageType, uint32_t transactionId);
@@ -101,11 +109,103 @@ class PennChordMessage : public Header
         std::string pingMessage;
       };
 
+    struct FindSuccessorReq
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      uint32_t idToFind;
+      Ipv4Address requestorIp;
+    };
+
+    struct FindSuccessorRsp
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address successorIp;
+    };
+
+    struct StabilizeReq
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender;
+      Ipv4Address receiver;
+    };
+
+    struct StabilizeRsp
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender;
+    };
+
+    struct NotifyPkt
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address newPredecessor;
+    };
+
+    struct RingstatePkt
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address endRingState;
+    };
+
+    struct LeaveSuccessor
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender; 
+      Ipv4Address newPred;
+    };
+
+    struct LeavePredecessor
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address sender; 
+      Ipv4Address newSucc;
+    };
+
   private:
     struct
       {
         PingReq pingReq;
         PingRsp pingRsp;
+        FindSuccessorReq findSuccessorReq;
+        FindSuccessorRsp findSuccessorRsp;
+        StabilizeReq stabilizeReq;
+        StabilizeRsp stabilizeRsp;
+        NotifyPkt notifyPkt;
+        RingstatePkt ringStatePkt;
+        LeaveSuccessor leaveSuccessor;
+        LeavePredecessor leavePrededecessor;
       } m_message;
     
   public:
@@ -130,6 +230,31 @@ class PennChordMessage : public Header
      *  \param message Payload String
      */
     void SetPingRsp (std::string message);
+
+    void SetFindSuccessorReq(uint32_t idToFind, Ipv4Address requestorIp);
+    FindSuccessorReq GetFindSuccessorReq();
+
+    void SetFindSuccessorRsp(Ipv4Address successorIp);
+    FindSuccessorRsp GetFindSuccessorRsp();
+
+    void SetStabilizeReq(Ipv4Address sender, Ipv4Address recieiver);
+    StabilizeReq GetStabilizeReq();
+
+    void SetStabilizeRsp(Ipv4Address sender);
+    StabilizeRsp GetStabilizeRsp();
+
+    void SetNotifyPkt(Ipv4Address newPredecessor);
+    NotifyPkt GetNotifyPkt();
+
+    void SetRingstatePkt(Ipv4Address endRingState);
+    RingstatePkt GetRingstatePkt();
+
+    void SetLeaveSuccessor(Ipv4Address sender, Ipv4Address newPred);
+    LeaveSuccessor GetLeaveSuccessor();
+    
+    void SetLeavePredecessor(Ipv4Address sender, Ipv4Address newSucc);
+    LeavePredecessor GetLeavePredecessor();
+
 
 }; // class PennChordMessage
 
