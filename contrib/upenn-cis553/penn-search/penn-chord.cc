@@ -303,6 +303,9 @@ PennChord::Join(Ipv4Address landmark)
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(landmark, m_appPort));
 
+  // TO-DO Might need to change parameters of call
+  CHORD_LOG(GraderLogs::GetLookupIssueLogStr(myId, myId));
+
   //CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
 }
 
@@ -319,7 +322,8 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
   bool replyTriggered = false;
 
-  if (IsInBetween(idToFind, selfId, successorId) || selfId == successorId){
+  //REMOVE LAST OR STATEMENT WHEN FINGER TABLE COMPLETE
+  if (IsInBetween(selfId, idToFind, successorId) || selfId == successorId || selfId == idToFind){
     replyTriggered = true;
   }
 
@@ -327,11 +331,18 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     //respond to requestor
     uint32_t transactionId = message.GetTransactionId();
     PennChordMessage resp = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_RSP, transactionId);
-    resp.SetFindSuccessorRsp(m_successor);
+    
+    if (selfId == idToFind) {
+      resp.SetFindSuccessorRsp(GetLocalAddress());
+    } else {
+      resp.SetFindSuccessorRsp(m_successor);
+    }
 
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(resp);
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
+
+    CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(requestorIp), idToFind));
 
     //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
@@ -341,6 +352,8 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(message);
     m_socket->SendTo(packet, 0, InetSocketAddress(m_successor, m_appPort));
+
+    CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(m_successor),  PennKeyHelper::CreateShaKey(m_successor), idToFind));
 
     //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
   }
@@ -354,6 +367,14 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   Ipv4Address successorIp = rsp.successorIp;
 
   m_successor = successorIp;
+
+  //REMOVE ONCE O(log n) LOOKUP IS COMPLETE
+  uint32_t transactionId = message.GetTransactionId();
+
+  if (!m_lookupCallback.IsNull())
+  {
+    m_lookupCallback(successorIp, transactionId);
+  }
 
   //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
@@ -635,6 +656,27 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
     m_successor = newSuccessor;
   }
 
+}
+
+void
+PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
+{
+  PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
+
+  msg.SetFindSuccessorReq(idToFind, GetLocalAddress());
+
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+
+  m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
+
+  CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, idToFind));
+}
+
+void 
+PennChord::SetLookUpCallback(Callback<void, Ipv4Address, uint32_t> lookupCb)
+{
+  m_lookupCallback = lookupCb;
 }
 
 uint32_t

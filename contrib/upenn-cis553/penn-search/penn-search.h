@@ -68,6 +68,13 @@ class PennSearch : public PennApplication
     virtual void SetChordVerbose (bool on);
     virtual void SetSearchVerbose (bool on);
 
+    //lookup
+    void Lookup(uint32_t hashToFind);
+    void HandleLookupResult(Ipv4Address owner, uint32_t hashToFind);
+    void ProcessLookupResult(Ipv4Address owner, uint32_t hashToFind);
+    // tracker for lookups in flight
+    std::map<uint32_t, uint32_t> m_lookupTracker; //transactionId -> hashToFind
+
   protected:
     virtual void DoDispose ();
     

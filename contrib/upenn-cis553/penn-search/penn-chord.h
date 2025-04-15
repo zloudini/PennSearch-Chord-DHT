@@ -81,6 +81,12 @@ class PennChord : public PennApplication
     void ProcessLeaveSuccessor(PennChordMessage message);
     void ProcessLeavePredecessor(PennChordMessage message);
 
+    // lookup logic
+    void ChordLookup(uint32_t transactionId, uint32_t hashToFind);
+    void SetLookUpCallback(Callback<void, Ipv4Address, uint32_t> lookupCb);
+
+    
+
   protected:
     virtual void DoDispose ();
     
@@ -101,6 +107,8 @@ class PennChord : public PennApplication
     Callback <void, Ipv4Address, std::string> m_pingSuccessFn;
     Callback <void, Ipv4Address, std::string> m_pingFailureFn;
     Callback <void, Ipv4Address, std::string> m_pingRecvFn;
+
+    Callback <void, Ipv4Address, uint32_t> m_lookupCallback;
 
     // successor, predecessor, and nodeHash
     Ipv4Address m_predecessor;
