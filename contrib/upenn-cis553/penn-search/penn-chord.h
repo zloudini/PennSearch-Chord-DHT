@@ -85,7 +85,6 @@ class PennChord : public PennApplication
     void ChordLookup(uint32_t transactionId, uint32_t hashToFind);
     void SetLookUpCallback(Callback<void, Ipv4Address, uint32_t> lookupCb);
 
-    
 
   protected:
     virtual void DoDispose ();
@@ -120,15 +119,20 @@ class PennChord : public PennApplication
     // finger table entry struct
     struct FingerTableEntry
     {
-      uint32_t start;       // (n + 2^i) % 2^m
-      uint32_t finger_id;   // id of successor of start
-      uint32_t finger_ip;   // ip of successor of start
-      uint32_t finger_port; // port of successor of start
-    }
+      uint32_t start;         // (n + 2^i) % 2^m
+      uint32_t finger_id;     // id of successor of start
+      Ipv4Address finger_ip;  // ip of successor of start
+      uint32_t finger_port;   // port of successor of start
+    };
 
-    // finger table initilization and resize to 32
+    // finger table initilization
     std::vector<FingerTableEntry> m_fingerTable;
-    m_fingerTable.resize(32);
+
+    uint32_t m_fingerTableSize;   // 32
+    uint32_t m_nextFingerToFix;   // cycles 1..32
+
+    void InitFingerTable();
+    void FixFingerTable();
 };
 
 #endif
