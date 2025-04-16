@@ -126,8 +126,9 @@ class PennChord : public PennApplication
       uint32_t finger_port; // port of successor of start
     }
 
-    // finger table
+    // finger table initilization and resize to 32
     std::vector<FingerTableEntry> m_fingerTable;
+    m_fingerTable.resize(32);
 };
 
 #endif
