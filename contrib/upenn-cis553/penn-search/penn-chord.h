@@ -116,6 +116,18 @@ class PennChord : public PennApplication
     uint32_t m_nodeHash;
 
     Timer m_stabilizeTimer;
+
+    // finger table entry struct
+    struct FingerTableEntry
+    {
+      uint32_t start;       // (n + 2^i) % 2^m
+      uint32_t finger_id;   // id of successor of start
+      uint32_t finger_ip;   // ip of successor of start
+      uint32_t finger_port; // port of successor of start
+    }
+
+    // finger table
+    std::vector<FingerTableEntry> m_fingerTable;
 };
 
 #endif
