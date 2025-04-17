@@ -137,7 +137,7 @@ class PennChord : public PennApplication
 
     void InitFingerTable();
     void FixFingerTable();
-    uint32_t ClosestPrecedingFinger(uint32_t idToFind) const;
+    int ClosestPrecedingFinger(uint32_t idToFind) const;
 };
 
 #endif
