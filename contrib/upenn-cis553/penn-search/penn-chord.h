@@ -70,7 +70,7 @@ class PennChord : public PennApplication
     void Stabilize();
     void ProcessStabilizeReq(PennChordMessage message);
     void ProcessStabilizeRsp(PennChordMessage message);
-    bool IsInBetween(uint32_t start, uint32_t target, uint32_t end);
+    bool IsInBetween(uint32_t start, uint32_t target, uint32_t end) const;
 
     void ProcessNotifcationPkt(PennChordMessage message);
 
@@ -115,11 +115,12 @@ class PennChord : public PennApplication
     uint32_t m_nodeHash;
 
     Timer m_stabilizeTimer;
+    Timer m_fixFingerTimer;
 
     // finger table entry struct
     struct FingerTableEntry
     {
-      uint32_t start;         // (n + 2^i) % 2^m
+      uint32_t start;         // (nodeId + 2^i) % 2^32
       uint32_t finger_id;     // id of successor of start
       Ipv4Address finger_ip;  // ip of successor of start
       uint32_t finger_port;   // port of successor of start
@@ -128,11 +129,15 @@ class PennChord : public PennApplication
     // finger table initilization
     std::vector<FingerTableEntry> m_fingerTable;
 
+    std::map<uint32_t,uint32_t> m_pendingFingers;
+
     uint32_t m_fingerTableSize;   // 32
     uint32_t m_nextFingerToFix;   // cycles 1..32
+    bool m_fingerTableInitialized; // true if finger table is initialized
 
     void InitFingerTable();
     void FixFingerTable();
+    uint32_t ClosestPrecedingFinger(uint32_t idToFind) const;
 };
 
 #endif

@@ -47,6 +47,11 @@ PennChord::PennChord ()
 {
   Ptr<UniformRandomVariable> m_uniformRandomVariable = CreateObject<UniformRandomVariable> ();
   m_currentTransactionId = m_uniformRandomVariable->GetValue (0x00000000, 0xFFFFFFFF);
+
+  m_fingerTableSize = 32;
+  m_nextFingerToFix = 1;
+  m_fingerTableInitialized = false;
+  m_fingerTable.resize(m_fingerTableSize);
 }
 
 PennChord::~PennChord ()
@@ -86,6 +91,9 @@ PennChord::StartApplication (void)
 
   m_stabilizeTimer.SetFunction(&PennChord::Stabilize, this);
   m_stabilizeTimer.Schedule(Seconds(2));
+
+  m_fixFingerTimer.SetFunction(&PennChord::FixFingerTable, this);
+  m_fixFingerTimer.Schedule(Seconds(1));
 }
 
 void
@@ -105,6 +113,8 @@ PennChord::StopApplication (void)
   m_pingTracker.clear ();
 
   m_stabilizeTimer.Cancel ();
+
+  m_fixFingerTimer.Cancel ();
 }
 
 void
@@ -283,6 +293,7 @@ PennChord::ChordCreate()
   m_successor = selfIp;
   // might be unneccessary
   m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
+  InitFingerTable();
 
   //("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
 }
@@ -342,16 +353,40 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     packet->AddHeader(resp);
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
 
-    CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(requestorIp), idToFind));
+    // CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(requestorIp), idToFind));
+
+    Ipv4Address succ = (selfId==idToFind ? GetLocalAddress() : m_successor);
+    CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(succ), idToFind));
 
     //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
   else
   {
+    uint32_t nextHopId = ClosestPrecedingFinger(idToFind);
+    Ipv4Address nextHopIp;
+    uint16_t    nextHopPort;
+
+    // scan finger table to find its ip+port
+    for (auto &e : m_fingerTable)
+    {
+      if (e.finger_id == nextHopId)
+      {
+        nextHopIp = e.finger_ip;
+        nextHopPort = e.finger_port;
+        break;
+      }
+    }
+    // fallback to successor if nothing matched
+    if (nextHopIp == Ipv4Address::GetAny())
+    {
+      nextHopIp = m_successor;
+      nextHopPort = m_appPort;
+    }
+    
     // forward to successor
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(message);
-    m_socket->SendTo(packet, 0, InetSocketAddress(m_successor, m_appPort));
+    m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, nextHopPort));
 
     CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(m_successor),  PennKeyHelper::CreateShaKey(m_successor), idToFind));
 
@@ -367,9 +402,27 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   Ipv4Address successorIp = rsp.successorIp;
 
   m_successor = successorIp;
+  if (!m_fingerTableInitialized) {
+    InitFingerTable();
+    m_fingerTableInitialized = true;
+  }
 
   //REMOVE ONCE O(log n) LOOKUP IS COMPLETE
   uint32_t transactionId = message.GetTransactionId();
+
+  auto it = m_pendingFingers.find(transactionId);
+  if (it != m_pendingFingers.end())
+  {
+    uint32_t idx = it->second;
+    Ipv4Address succIp = message.GetFindSuccessorRsp().successorIp;
+
+    // update the finger table
+    m_fingerTable[idx].finger_ip   = succIp;
+    m_fingerTable[idx].finger_port = m_appPort;
+    m_fingerTable[idx].finger_id   = PennKeyHelper::CreateShaKey(succIp);
+
+    m_pendingFingers.erase(it);
+  }
 
   if (!m_lookupCallback.IsNull())
   {
@@ -400,7 +453,7 @@ PennChord::Stabilize()
   m_stabilizeTimer.Schedule(Seconds(1));
 }
 
-bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end)
+bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end) const
 {
   if (start < end) {
     return (start < target && target < end);
@@ -656,6 +709,67 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
     m_successor = newSuccessor;
   }
 
+}
+
+/*Finger Table Methods*/
+
+void
+PennChord::InitFingerTable()
+{
+  // loop over all finger table entries
+  for (uint32_t i = 0; i < m_fingerTableSize; i++)
+    {
+      // compute start
+      uint32_t start = (m_nodeHash + (1u << i)) % (1u << m_fingerTableSize);
+      m_fingerTable[i].start = start;
+
+      // set each finger to successor
+      m_fingerTable[i].finger_ip = m_successor;
+      m_fingerTable[i].finger_port = m_appPort;
+      m_fingerTable[i].finger_id = PennKeyHelper::CreateShaKey(m_successor); // not sure about this? already defined elsewhere?
+    }
+
+  // reset next finger to fix
+  m_nextFingerToFix = 1;
+}
+
+void
+PennChord::FixFingerTable()
+{
+  // get next finger to be fixed
+  uint32_t nextFinger = m_nextFingerToFix;
+
+  uint32_t idToFind = (m_nodeHash + (1u << nextFinger)) % (1u << m_fingerTableSize);
+
+  uint32_t tx = GetNextTransactionId();
+  m_pendingFingers[tx] = nextFinger-1;
+  ChordLookup(tx, idToFind);
+
+  m_nextFingerToFix = (nextFinger % m_fingerTableSize) + 1;
+  // schedule next finger fix
+  m_fixFingerTimer.Schedule(Seconds(1));
+}
+
+uint32_t
+PennChord::ClosestPrecedingFinger(uint32_t idToFind) const
+{
+  // loop over all finger table entries
+  for (int i = int(m_fingerTableSize) - 1; i >= 0; i--)
+    {
+      // skip uninitialized entries
+      if (m_fingerTable[i].finger_ip == Ipv4Address::GetAny())
+        {
+          continue;
+        }
+
+      uint32_t fid = m_fingerTable[i].finger_id;
+      // check if finger is in between
+      if (IsInBetween(m_nodeHash, fid, idToFind))
+        {
+          return fid;
+        }
+    }
+  return PennKeyHelper::CreateShaKey(m_successor);
 }
 
 void
