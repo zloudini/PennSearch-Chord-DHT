@@ -19,6 +19,8 @@
 
 #include "penn-search.h"
 #include "ns3/grader-logs.h"
+#include <sstream>
+#include <fstream>
 
 #include "ns3/random-variable-stream.h"
 #include "ns3/inet-socket-address.h"
@@ -115,6 +117,10 @@ PennSearch::StartApplication (void)
   m_auditPingsTimer.SetFunction (&PennSearch::AuditPings, this);
   // Start timers
   m_auditPingsTimer.Schedule (m_pingTimeout);
+
+  // set lookup success callback
+  m_chord->SetLookupSuccessCallback(MakeCallback(&PennSearch::HandleChordLookupSuccess, this));
+  m_chord->SetLookupFailureCallback(MakeCallback(&PennSearch::HandleChordLookupFailure, this));
 }
 
 void
@@ -176,6 +182,10 @@ PennSearch::ProcessCommand (std::vector<std::string> tokens)
             }
         }
     }
+    else if (command == "PUBLISH") {
+      std::string filename = tokens[1];
+      PublishMetadataFile(filename); // publish metadata file to map: <transaction id, <keyword, docID>>
+    }
 }
 
 void
@@ -225,6 +235,12 @@ PennSearch::RecvMessage (Ptr<Socket> socket)
         break;
       case PennSearchMessage::PING_RSP:
         ProcessPingRsp (message, sourceAddress, sourcePort);
+        break;
+      case PennSearchMessage::PUBLISH_REQ:
+        ProcessPublishReq (message, sourceAddress, sourcePort);
+        break;
+      case PennSearchMessage::PUBLISH_RSP:
+        ProcessPublishRsp (message, sourceAddress, sourcePort);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -357,4 +373,142 @@ PennSearch::SetSearchVerbose (bool on)
 {
   m_chord->SetSearchVerbose (on);
   g_searchVerbose = on;
+}
+
+/** PUBLISH AND LOOKUP **/
+
+/**
+ * Publish metadata file to map: <transaction id, <keyword, docID>>
+ * \param filename The metadata file to publish
+ */
+void
+PennSearch::PublishMetadataFile(std::string filename)
+{
+  // open file reading lines
+  // example: Doc23 keywordA keywordB …
+
+  // grab the line
+  std::ifstream in(filename);
+
+  if (!in.is_open()) {
+    ERROR_LOG("Failed to open metadata file: " << filename);
+    return;
+  }
+
+  // clear pending publishes to avoid duplicates for a new publish
+  m_pendingPublishes.clear();
+
+  std::string line;
+  while (std::getline(in, line)) {
+    // prepare for reading in file data
+    istringstream iss(line);
+    std::string docID;
+    std::vector<std::string> keywords;
+
+    // grab the docid
+    iss >> docID;
+    std::string kw;
+
+    // grab all the keywords and lookup for each keyword and create a publish request
+    while (iss >> kw) {
+      uint32_t key = PennKeyHelper::CreateShaKey(kw);
+      uint32_t tid = m_chord->Lookup(key);
+      m_pendingPublishes[tid] = std::make_pair(kw, docID);
+    }
+  }
+  in.close();
+}
+
+/**
+ * Handle chord lookup success
+ * \param tid The transaction id of the lookup
+ * \param sourceAddress The source address of the lookup
+ */
+void
+PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address sourceAddress)
+{
+  // lookup success
+  auto it = m_pendingPublishes.find(tid);
+  if (it == m_pendingPublishes.end()) {
+    DEBUG_LOG("Lookup success for unknown transaction ID");
+    return;
+  }
+  // unpack publish request
+  std::string keyword = it->second.first;
+  std::string docID = it->second.second;
+  SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
+
+  // create publish request
+  PennSearchMessage req = PennSearchMessage(PennSearchMessage::PUBLISH_REQ, tid);
+  req.SetPublishReq(keyword, docID);
+
+  // send publish response
+  Ptr<Packet> packet = Create<Packet>();
+  packet->AddHeader(req);
+  m_socket->SendTo(packet, 0, InetSocketAddress(sourceAddress, m_appPort));
+
+  // wait for publish response from node to erase from pending publishes
+}
+
+/**
+ * Handle chord lookup failure
+ * \param tid The transaction id of the lookup
+ */
+void
+PennSearch::HandleChordLookupFailure(uint32_t tid)
+{
+  // lookup failure for unknown transaction ID
+  auto it = m_pendingPublishes.find(tid);
+  if (it == m_pendingPublishes.end()) {
+    DEBUG_LOG("Lookup failure for unknown transaction ID");
+  }
+  else {
+    m_pendingPublishes.erase(it); // remove from pending publishes after lookup failure
+  }
+}
+
+/**
+ * Process publish request
+ * \param message The publish request message
+ * \param sourceAddress The source address of the publish request
+ * \param sourcePort The source port of the publish request
+ */
+void
+PennSearch::ProcessPublishReq (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
+{
+  // unpack publish request
+  auto publish_req = message.GetPublishReq();
+  std::string keyword = publish_req.keyword;
+  std::string docID = publish_req.docID;
+  uint32_t tid = message.GetTransactionId();
+
+  // store in local inverted index
+  m_invertedIndex[keyword].push_back(docID);
+
+  // log store for grader
+  SEARCH_LOG(GraderLogs::GetStoreLogStr(keyword, docID));
+
+  // send back publish response
+  PennSearchMessage resp = PennSearchMessage(PennSearchMessage::PUBLISH_RSP, tid);
+  resp.SetPublishRsp(); // payload is empty because grader does not expect any data
+
+  Ptr<Packet> packet = Create<Packet>();
+  packet->AddHeader(resp);
+  m_socket->SendTo(packet, 0, InetSocketAddress(sourceAddress, sourcePort));
+}
+
+/**
+ * Process publish response
+ * \param message The publish response message
+ * \param sourceAddress The source address of the publish response
+ */
+void
+PennSearch::ProcessPublishRsp (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
+{
+  // unpack publish response
+  uint32_t tid = message.GetTransactionId();
+  auto it = m_pendingPublishes.find(tid);
+  if (it != m_pendingPublishes.end()) {
+    m_pendingPublishes.erase(it); // remove from pending publishes after receiving response
+  }
 }

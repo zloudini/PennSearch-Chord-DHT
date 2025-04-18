@@ -52,11 +52,18 @@ class PennSearch : public PennApplication
     void AuditPings ();
     uint32_t GetNextTransactionId ();
    
-
     // Chord Callbacks
     void HandleChordPingSuccess (Ipv4Address destAddress, std::string message);
     void HandleChordPingFailure (Ipv4Address destAddress, std::string message);
     void HandleChordPingRecv (Ipv4Address destAddress, std::string message);
+
+    // Publish and Lookup Callbacks
+    void ProcessPublishReq (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
+    void ProcessPublishRsp (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
+    void HandleChordLookupSuccess (uint32_t tid, Ipv4Address sourceAddress);
+    void HandleChordLookupFailure (uint32_t tid);
+    void PublishMetadataFile(std::string filename);
+    std::map<uint32_t, std::pair<std::string, std::string>> m_pendingPublishes;
 
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
@@ -84,6 +91,8 @@ class PennSearch : public PennApplication
     Timer m_auditPingsTimer;
     // Ping tracker
     std::map<uint32_t, Ptr<PingRequest> > m_pingTracker;
+    // Inverted index
+    std::map<std::string, std::vector<std::string>> m_invertedIndex;
 };
 
 #endif
