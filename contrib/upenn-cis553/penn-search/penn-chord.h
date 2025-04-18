@@ -115,6 +115,8 @@ class PennChord : public PennApplication
     uint32_t m_nodeHash;
 
     Timer m_stabilizeTimer;
+
+    // finger table timer to call FixFingerTable
     Timer m_fixFingerTimer;
 
     // finger table entry struct
@@ -129,12 +131,14 @@ class PennChord : public PennApplication
     // finger table initilization
     std::vector<FingerTableEntry> m_fingerTable;
 
+    // tracks finger table entries that are in the process of being fixed
     std::map<uint32_t,uint32_t> m_pendingFingers;
 
     uint32_t m_fingerTableSize;   // 32
-    uint32_t m_nextFingerToFix;   // cycles 1..32
+    uint32_t m_nextFingerToFix;   // cycles 0..31
     bool m_fingerTableInitialized; // true if finger table is initialized
 
+    // finger table methods
     void InitFingerTable();
     void FixFingerTable();
     int ClosestPrecedingFinger(uint32_t idToFind) const;

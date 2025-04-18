@@ -48,10 +48,14 @@ PennChord::PennChord ()
   Ptr<UniformRandomVariable> m_uniformRandomVariable = CreateObject<UniformRandomVariable> ();
   m_currentTransactionId = m_uniformRandomVariable->GetValue (0x00000000, 0xFFFFFFFF);
 
+  // set finger table size and resize actual finger table
   m_fingerTableSize = 32;
+  m_fingerTable.resize(m_fingerTableSize);
+
+  // set nextFingerToFix to first entry and mark fingerTable as not initialzed yet
   m_nextFingerToFix = 0;
   m_fingerTableInitialized = false;
-  m_fingerTable.resize(m_fingerTableSize);
+
 }
 
 PennChord::~PennChord ()
@@ -92,6 +96,7 @@ PennChord::StartApplication (void)
   m_stabilizeTimer.SetFunction(&PennChord::Stabilize, this);
   m_stabilizeTimer.Schedule(Seconds(2));
 
+  // configure and start finger table timer
   m_fixFingerTimer.SetFunction(&PennChord::FixFingerTable, this);
   m_fixFingerTimer.Schedule(Seconds(1));
 }
@@ -293,6 +298,8 @@ PennChord::ChordCreate()
   m_successor = selfIp;
   // might be unneccessary
   m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
+  
+  // initialize finger table on ChordCreate
   InitFingerTable();
 
   //("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
@@ -410,27 +417,28 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
     m_fingerTableInitialized = true;
   }
 
-  //REMOVE ONCE O(log n) LOOKUP IS COMPLETE
-  uint32_t transactionId = message.GetTransactionId();
+  // get transaction id
+  uint32_t tx = message.GetTransactionId();
 
-  auto it = m_pendingFingers.find(transactionId);
-  if (it != m_pendingFingers.end())
+  // check if transaction id is in pendingFingers
+  auto txId = m_pendingFingers.find(tx);
+  
+  // transaction id found in pendingFingers
+  if (txId != m_pendingFingers.end())
   {
-    uint32_t idx = it->second;
-    Ipv4Address succIp = rsp.successorIp;
+    // get index of finger table entry in pendingFingers
+    uint32_t idx = txId->second;
 
-    // Ipv4Address succIp = message.GetFindSuccessorRsp().successorIp;
-
-    // update the finger table
-    m_fingerTable[idx].finger_ip   = succIp;
+    // update finger table then erase transactionId from pendingFingers
+    m_fingerTable[idx].finger_ip = m_successor;
     m_fingerTable[idx].finger_port = m_appPort;
-    m_fingerTable[idx].finger_id   = PennKeyHelper::CreateShaKey(succIp);
-    m_pendingFingers.erase(it);
+    m_fingerTable[idx].finger_id = PennKeyHelper::CreateShaKey(successorIp);
+    m_pendingFingers.erase(txId);
   }
 
   if (!m_lookupCallback.IsNull())
   {
-    m_lookupCallback(successorIp, transactionId);
+    m_lookupCallback(successorIp, tx);
   }
 
   //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
@@ -723,25 +731,28 @@ void
 PennChord::InitFingerTable()
 {
   // loop over all finger table entries
-  for (uint32_t i = 0; i < m_fingerTableSize; i++)
-    {
-      // start = id + 2^i mod 2^32
-      m_fingerTable[i].start = uint32_t(m_nodeHash + (1u << i));
-      m_fingerTable[i].finger_ip = m_successor;
-      m_fingerTable[i].finger_port = m_appPort;
-      m_fingerTable[i].finger_id = PennKeyHelper::CreateShaKey(m_successor);
+  for (uint32_t i = 0; i < m_fingerTableSize; i++) {
+    // calculate start = id + 2^i mod 2^32
+    uint32_t start = m_nodeHash + (1u << i);
 
-      // // compute start
-      // uint32_t start = (m_nodeHash + (1u << i)) % (1u << m_fingerTableSize);
-      // m_fingerTable[i].start = start;
+    // store start of current index in finger table, initialize other fields
+    m_fingerTable[i].start = start;
+    m_fingerTable[i].finger_ip = Ipv4Address::GetAny();
+    m_fingerTable[i].finger_id = 0;
+    m_fingerTable[i].finger_port = 0;
 
-      // // set each finger to successor
-      // m_fingerTable[i].finger_ip = m_successor;
-      // m_fingerTable[i].finger_port = m_appPort;
-      // m_fingerTable[i].finger_id = PennKeyHelper::CreateShaKey(m_successor); // not sure about this? already defined elsewhere?
-    }
+    // find successor of start
+    uint32_t tx = GetNextTransactionId();
+    m_pendingFingers[tx] = i;
+    PennChordMessage msg(PennChordMessage::FIND_SUCCESSOR_REQ, tx);
+    msg.SetFindSuccessorReq(start, GetLocalAddress());
+    Ptr<Packet> pkt = Create<Packet>();
+    pkt->AddHeader(msg);
+    m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
+    CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, start));
+  }
 
-  // reset next finger to fix
+  // reset nextFingerToFix and set finger table as initialized
   m_nextFingerToFix = 0;
   m_fingerTableInitialized = true;
 }
@@ -749,30 +760,36 @@ PennChord::InitFingerTable()
 void
 PennChord::FixFingerTable()
 {
-  // get next finger to be fixed
+  // if finger table is not initialized, reschedule and exit
+  if (!m_fingerTableInitialized)
+    {
+      m_fixFingerTimer.Schedule(Seconds(1));
+      return;
+    }
+
+  // get index of next finger to be fixed
   uint32_t nextFinger = m_nextFingerToFix;
+  
+  // look up successor of "start" of finger being fixed
   uint32_t target = m_fingerTable[nextFinger].start;
   uint32_t tx = GetNextTransactionId();
 
+  // associate transaction id with finger table entry (to be picked up in ProcessFindSuccessorRsp)
   m_pendingFingers[tx] = nextFinger;
-  ChordLookup(tx, target);
 
-  // schedule next finger fix
+  // send req to find successor of start
+  PennChordMessage msg(PennChordMessage::FIND_SUCCESSOR_REQ, tx);
+  msg.SetFindSuccessorReq(target, GetLocalAddress());
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
+
+  // autograder log
+  CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, target));
+
+  // advance m_nextFingerToFix and schedule next finger fix
   m_nextFingerToFix = (nextFinger + 1) % m_fingerTableSize;
   m_fixFingerTimer.Schedule(Seconds(1));
-
-  // get next finger to be fixed
-  // uint32_t nextFinger = m_nextFingerToFix;
-
-  // uint32_t idToFind = (m_nodeHash + (1u << nextFinger)) % (1u << m_fingerTableSize);
-
-  // uint32_t tx = GetNextTransactionId();
-  // m_pendingFingers[tx] = nextFinger-1;
-  // ChordLookup(tx, idToFind);
-
-  // m_nextFingerToFix = (nextFinger % m_fingerTableSize) + 1;
-  // // schedule next finger fix
-  // m_fixFingerTimer.Schedule(Seconds(1));
 }
 
 int
@@ -787,8 +804,10 @@ PennChord::ClosestPrecedingFinger(uint32_t idToFind) const
           continue;
         }
 
+      // get finger id of ith finger
       uint32_t fid = m_fingerTable[i].finger_id;
-      // check if finger is in between
+
+      // check if finger is in between idToFind and the target
       if (IsInBetween(m_nodeHash, fid, idToFind))
         {
           return i;
