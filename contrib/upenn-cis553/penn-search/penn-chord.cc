@@ -87,6 +87,7 @@ PennChord::StartApplication (void)
   
   m_nodeHash = PennKeyHelper::CreateShaKey(GetLocalAddress());
   m_predecessor = Ipv4Address::GetAny();
+  m_successor = GetLocalAddress(); // self is its own successor
 
   // Configure timers
   m_auditPingsTimer.SetFunction (&PennChord::AuditPings, this);
