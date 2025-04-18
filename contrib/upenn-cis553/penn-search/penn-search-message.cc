@@ -66,6 +66,12 @@ PennSearchMessage::GetSerializedSize (void) const
       case PING_RSP:
         size += m_message.pingRsp.GetSerializedSize ();
         break;
+      case PUBLISH_REQ:
+        size += m_message.publishReq.GetSerializedSize ();
+        break;
+      case PUBLISH_RSP:
+        size += m_message.publishRsp.GetSerializedSize ();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -88,6 +94,12 @@ PennSearchMessage::Print (std::ostream &os) const
       case PING_RSP:
         m_message.pingRsp.Print (os);
         break;
+      case PUBLISH_REQ:
+        m_message.publishReq.Print (os);
+        break;
+      case PUBLISH_RSP:
+        m_message.publishRsp.Print (os);
+        break;
       default:
         break;  
     }
@@ -108,6 +120,12 @@ PennSearchMessage::Serialize (Buffer::Iterator start) const
         break;
       case PING_RSP:
         m_message.pingRsp.Serialize (i);
+        break;
+      case PUBLISH_REQ:
+        m_message.publishReq.Serialize (i);
+        break;
+      case PUBLISH_RSP:
+        m_message.publishRsp.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -131,6 +149,12 @@ PennSearchMessage::Deserialize (Buffer::Iterator start)
         break;
       case PING_RSP:
         size += m_message.pingRsp.Deserialize (i);
+        break;
+      case PUBLISH_REQ:
+        size += m_message.publishReq.Deserialize (i);
+        break;
+      case PUBLISH_RSP:
+        size += m_message.publishRsp.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -275,3 +299,153 @@ PennSearchMessage::GetTransactionId (void) const
   return m_transactionId;
 }
 
+/** PUBLISH REQ **/
+
+/**
+ * Print publish request
+ * \param os The output stream
+ */
+void
+PennSearchMessage::PublishReq::Print (std::ostream &os) const
+{
+  os << "PublishReq:: Keyword: " << keyword << " DocID: " << docID << "\n";
+}
+
+/**
+ * Get serialized size of publish request
+ * \return The serialized size
+ */
+uint32_t
+PennSearchMessage::PublishReq::GetSerializedSize (void) const
+{
+  uint32_t size;
+  size = sizeof(uint16_t)  // length of keyword
+    + keyword.size()  // keyword
+    + sizeof(uint16_t)  // length of docID
+    + docID.size();  // docID
+  return size;
+}
+
+/**
+ * Serialize publish request
+ * \param start The buffer iterator
+ */
+void
+PennSearchMessage::PublishReq::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteU16(keyword.size()); // length of keyword
+  start.Write((uint8_t*) keyword.data(), keyword.size()); // keyword
+  start.WriteU16(docID.size()); // length of docID
+  start.Write((uint8_t*) docID.data(), docID.size()); // docID
+}
+
+/**
+ * Deserialize publish request
+ * \param start The buffer iterator
+ * \return The serialized size
+ */
+uint32_t
+PennSearchMessage::PublishReq::Deserialize (Buffer::Iterator &start)
+{
+  uint16_t klen = start.ReadU16(); // length of keyword 
+  keyword.resize(klen); // resize keyword
+  start.Read ((uint8_t*)keyword.data(), klen); // keyword
+  uint16_t dlen = start.ReadU16(); // length of docID
+  docID.resize(dlen); // resize docID
+  start.Read ((uint8_t*)docID.data(), dlen); // docID
+  return GetSerializedSize();
+}
+
+/**
+ * Set publish request
+ * \param keyword The keyword
+ * \param docID The docID
+ */
+void
+PennSearchMessage::SetPublishReq (std::string keyword, std::string docID)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = PUBLISH_REQ;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == PUBLISH_REQ);
+    }
+  m_message.publishReq.keyword = keyword;
+  m_message.publishReq.docID = docID;
+}
+
+PennSearchMessage::PublishReq
+PennSearchMessage::GetPublishReq ()
+{
+  return m_message.publishReq;
+}
+
+
+/** PUBLISH RSP **/
+
+/**
+ * Print publish response
+ * \param os The output stream
+ */
+void
+PennSearchMessage::PublishRsp::Print (std::ostream &os) const
+{
+  os << "PublishRsp:: \n";
+}
+
+/**
+ * Get serialized size of publish response
+ * \return The serialized size
+ */
+uint32_t
+PennSearchMessage::PublishRsp::GetSerializedSize (void) const
+{
+  return 0;
+} 
+
+/**
+ * Serialize publish response
+ * \param start The buffer iterator
+ */
+void
+PennSearchMessage::PublishRsp::Serialize (Buffer::Iterator &start) const
+{
+}
+
+/**
+ * Deserialize publish response
+ * \param start The buffer iterator
+ * \return The serialized size
+ */
+uint32_t
+PennSearchMessage::PublishRsp::Deserialize (Buffer::Iterator &start)
+{
+  return GetSerializedSize();
+}
+
+/**
+ * Set publish response
+ */
+void
+PennSearchMessage::SetPublishRsp ()
+{
+  if (m_messageType == 0)
+  {
+    m_messageType = PUBLISH_RSP;
+  } 
+  else {
+    NS_ASSERT (m_messageType == PUBLISH_RSP);
+  }
+}
+
+/**
+ * Get publish response
+ * \return The publish response
+ */
+PennSearchMessage::PublishRsp
+PennSearchMessage::GetPublishRsp () const
+{
+  return m_message.publishRsp;
+}

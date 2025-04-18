@@ -37,7 +37,9 @@ class PennSearchMessage : public Header
       {
         PING_REQ = 1,
         PING_RSP = 2,
-        // Define extra message types when needed       
+        // Define extra message types when needed 
+        PUBLISH_REQ = 3,
+        PUBLISH_RSP = 4,    
       };
 
     PennSearchMessage (PennSearchMessage::MessageType messageType, uint32_t transactionId);
@@ -102,12 +104,39 @@ class PennSearchMessage : public Header
         std::string pingMessage;
       };
 
+    /**
+     * Publish request: this is the request to publish a keyword and docID
+     */
+    struct PublishReq
+      {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // Payload
+        std::string keyword;
+        std::string docID;
+      };
+
+    /**
+     * Publish response: this is the response to a publish request
+     */
+    struct PublishRsp
+      {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // no payload
+      };
 
   private:
     struct
       {
         PingReq pingReq;
         PingRsp pingRsp;
+        PublishReq publishReq;
+        PublishRsp publishRsp;
       } m_message;
     
   public:
@@ -133,6 +162,27 @@ class PennSearchMessage : public Header
      */
     void SetPingRsp (std::string message);
 
+    /**
+     *  \returns PublishReq Struct
+     */
+    PublishReq GetPublishReq ();
+
+    /**
+     *  \brief Sets PublishReq message params
+     *  \param message Payload String
+     */
+    void SetPublishReq (std::string keyword, std::string docID);
+
+    /**
+     *  \returns PublishRsp Struct
+     */
+    PublishRsp GetPublishRsp ();
+
+    /**
+     *  \brief Sets PublishRsp message params
+     *  \param message Payload String
+     */
+    void SetPublishRsp ();
 }; // class PennSearchMessage
 
 static inline std::ostream& operator<< (std::ostream& os, const PennSearchMessage& message)
