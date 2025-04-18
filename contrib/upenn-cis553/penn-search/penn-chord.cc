@@ -320,6 +320,13 @@ PennChord::Join(Ipv4Address landmark)
   // send packet
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (landmark == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: landmark is empty");
+    return;
+  }
+
   m_socket->SendTo(pkt, 0, InetSocketAddress(landmark, m_appPort));
 
   // TO-DO Might need to change parameters of call
@@ -359,6 +366,13 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(resp);
+
+    if (requestorIp == Ipv4Address::GetAny())
+    {
+      CHORD_LOG("Error: requestorIp is empty");
+      return;
+    }
+
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
 
     // CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(requestorIp), idToFind));
@@ -394,6 +408,13 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     // forward to successor
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(message);
+
+    if (nextHopIp == Ipv4Address::GetAny())
+    {
+      CHORD_LOG("Error: nextHopIp is empty");
+      return;
+    }
+
     m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, nextHopPort));
 
     // CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(m_successor),  PennKeyHelper::CreateShaKey(m_successor), idToFind));
@@ -430,6 +451,14 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
     // get index of finger table entry in pendingFingers
     uint32_t idx = txId->second;
 
+    // ensure index is within bounds
+    if (idx >= m_fingerTableSize)
+    {
+      CHORD_LOG("Error: Index out of bounds");
+      return;
+    }
+    
+
     // update finger table then erase transactionId from pendingFingers
     m_fingerTable[idx].finger_ip = m_successor;
     m_fingerTable[idx].finger_port = m_appPort;
@@ -459,6 +488,12 @@ PennChord::Stabilize()
   // send packet
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (receiver == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: receiver is empty");
+    return;
+  }
   m_socket->SendTo(pkt, 0, InetSocketAddress(receiver, m_appPort));
 
   // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
@@ -514,6 +549,12 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
       // send packet back to node that sent the request
       Ptr<Packet> pkt = Create<Packet>();
       pkt->AddHeader(msg);
+
+      if (senderIp == Ipv4Address::GetAny())
+      {
+        CHORD_LOG("Error: senderIp is empty");
+        return;
+      }
       m_socket->SendTo(pkt, 0, InetSocketAddress(senderIp, m_appPort));
 
       //CHORD_LOG("Stabilize: Sent StabilizeRsp to " << ReverseLookup(senderIp) << " updating successor to: " << ReverseLookup(updated_successor));
@@ -535,6 +576,12 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
   // send packet to node that needs to be notified
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (nodeToNotify == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: nodeToNotify is empty");
+    return;
+  }
   m_socket->SendTo(pkt, 0, InetSocketAddress(nodeToNotify, m_appPort));
 
   // CHORD_LOG("Notify: Sent NotifyPacket to " << ReverseLookup(nodeToNotify) << " for node " << ReverseLookup(newPredecessor))
@@ -618,6 +665,12 @@ PennChord::RingState()
   // send packet to node that needs to be notified
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (succIp == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: succIp is empty");
+    return;
+  }
   m_socket->SendTo(pkt, 0, InetSocketAddress(succIp, m_appPort));
   // CHORD_LOG("SENDING RINGSTATE TO: " << ReverseLookup(succIp));
 }
@@ -659,6 +712,12 @@ PennChord::ProcessRingStatePtk(PennChordMessage message)
 
     Ptr<Packet> pkt = Create<Packet>();
     pkt->AddHeader(msg);
+
+    if (succIp == Ipv4Address::GetAny())
+    {
+      CHORD_LOG("Error: succIp is empty");
+      return;
+    }
     m_socket->SendTo(pkt, 0, InetSocketAddress(succIp, m_appPort));
   }
 }
@@ -677,6 +736,12 @@ PennChord::Leave()
 
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (m_successor == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: m_successor is empty");
+    return;
+  }
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
   //CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
@@ -749,6 +814,12 @@ PennChord::InitFingerTable()
     msg.SetFindSuccessorReq(start, GetLocalAddress());
     Ptr<Packet> pkt = Create<Packet>();
     pkt->AddHeader(msg);
+
+    if (m_successor == Ipv4Address::GetAny())
+    {
+      CHORD_LOG("Error: m_successor is empty");
+      return;
+    }
     m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
     CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, start));
   }
@@ -783,6 +854,12 @@ PennChord::FixFingerTable()
   msg.SetFindSuccessorReq(target, GetLocalAddress());
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (m_successor == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: m_successor is empty");
+    return;
+  }
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
   // autograder log
@@ -826,6 +903,12 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
 
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
+
+  if (m_successor == Ipv4Address::GetAny())
+  {
+    CHORD_LOG("Error: m_successor is empty");
+    return;
+  }
 
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
