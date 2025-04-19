@@ -464,13 +464,16 @@ PennSearch::PublishMetadataFile(std::string filepath)
     // lookup keyword
     uint32_t key = PennKeyHelper::CreateShaKey(keyword);
 
+    
     // fire Chord lookup
     // map tid → (keyword, all its docIDs)
     uint32_t transactionId = GetNextTransactionId();
-    m_chord->ChordLookup(transactionId, key);
-
     // stash the whole vector of docIDs under this tid
     m_pendingPublishes[transactionId] = std::make_pair(keyword, docIDs);
+    m_chord->ChordLookup(transactionId, key);
+
+    // SEARCH_LOG("Sent with transactionId: " << transactionId << " looking for key: " << PennKeyHelper::KeyToHexString(key));
+
   }
 
   // DEBUG_LOG("Pending publishes: " << m_pendingPublishes.size());
@@ -487,8 +490,9 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 {
   // lookup success
   auto it = m_pendingPublishes.find(tid);
+  //SEARCH_LOG("SEARCHED FOR TRANSACTION ID: " << tid);
   if (it == m_pendingPublishes.end()) {
-    // DEBUG_LOG("Lookup success for unknown transaction ID");
+    //SEARCH_LOG("Lookup success for unknown transaction ID");
     return;
   }
 
@@ -506,6 +510,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(req);
     m_socket->SendTo(packet, 0, InetSocketAddress(owner, m_appPort));
+    // SEARCH_LOG("Publishing on Node: " << m_chord->ReverseLookup(owner))
   }
 
   // clean up pending publishes

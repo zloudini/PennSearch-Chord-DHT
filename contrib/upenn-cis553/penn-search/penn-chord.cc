@@ -305,7 +305,7 @@ PennChord::ChordCreate()
   // initialize finger table on ChordCreate
   InitFingerTable();
 
-  //("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
+  // CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
 }
 
 void
@@ -366,8 +366,6 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     // }
 
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
-
-    //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
   else
   {
@@ -443,12 +441,13 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   else
   {
     m_successor = successorIp;
-  }
 
-  // if (!m_lookupCallback.IsNull())
-  // {
-  //   m_lookupCallback(successorIp, tx);
-  // }
+    if (!m_lookupSuccessFn.IsNull())
+    {
+      // CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp));
+      m_lookupSuccessFn(tx, successorIp);
+    }
+  }
 
   //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
@@ -778,7 +777,7 @@ PennChord::InitFingerTable()
   // check if finger table is already initialized
   if (m_fingerTableInitialized)
   {
-    CHORD_LOG("Finger table already initialized");
+    // CHORD_LOG("Finger table already initialized");
     return;
   }
 
@@ -886,6 +885,8 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
   //   CHORD_LOG("Error: m_successor is empty");
   //   return;
   // }
+
+  // CHORD_LOG("TRANSACTION ID LOOKUP " << transactionId);
 
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
