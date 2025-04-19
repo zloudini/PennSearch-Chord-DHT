@@ -351,7 +351,7 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
   bool replyTriggered = false;
 
   //REMOVE LAST OR STATEMENT WHEN FINGER TABLE COMPLETE
-  if (IsInBetween(selfId, idToFind, successorId) || selfId == successorId || selfId == idToFind){
+  if (IsInBetween(selfId, idToFind, successorId) || selfId == successorId){
     replyTriggered = true;
   }
 
@@ -359,12 +359,8 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     //respond to requestor
     uint32_t transactionId = message.GetTransactionId();
     PennChordMessage resp = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_RSP, transactionId);
-    
-    if (selfId == idToFind) {
-      resp.SetFindSuccessorRsp(GetLocalAddress());
-    } else {
-      resp.SetFindSuccessorRsp(m_successor);
-    }
+
+    resp.SetFindSuccessorRsp(m_successor);
 
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(resp);
@@ -507,8 +503,7 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
   Ipv4Address nodeToNotify = req.receiver;
 
   uint32_t n = PennKeyHelper::CreateShaKey(senderIp);
-  // uint32_t successor = m_nodeHash;
-  uint32_t successor = PennKeyHelper::CreateShaKey(m_successor);
+  uint32_t successor = m_nodeHash;
 
 
   uint32_t x = PennKeyHelper::CreateShaKey(m_predecessor);
@@ -784,7 +779,7 @@ PennChord::InitFingerTable()
   CHORD_LOG("Entered InitFingerTable method");
 
   // check if finger table is already initialized
-  if (fingerTableInitialized)
+  if (m_fingerTableInitialized)
   {
     CHORD_LOG("Finger table already initialized");
     return;
@@ -812,7 +807,7 @@ PennChord::FixFingerTable()
   // if finger table is not initialized, reschedule and exit
   if (!m_fingerTableInitialized)
     {
-      initFingerTable();
+      InitFingerTable();
       m_fixFingerTimer.Schedule(Seconds(1));
       return;
     }
