@@ -463,10 +463,14 @@ PennSearch::PublishMetadataFile(std::string filename)
 
     // lookup keyword
     uint32_t key = PennKeyHelper::CreateShaKey(keyword);
-    uint32_t tid = m_chord->Lookup(key);
+
+    // fire Chord lookup
+    // map tid → (keyword, all its docIDs)
+    uint32_t transactionId = GetNextTransactionId();
+    m_chord->ChordLookup(transactionId, key);
 
     // stash the whole vector of docIDs under this tid
-    m_pendingPublishes[tid] = std::make_pair(keyword, docIDs);
+    m_pendingPublishes[transactionId] = std::make_pair(keyword, docIDs);
   }
 
   // DEBUG_LOG("Pending publishes: " << m_pendingPublishes.size());
