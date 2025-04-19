@@ -412,14 +412,14 @@ PennSearch::PublishMetadataFile(std::string filename)
     iss >> docID;
     std::string kw;
 
-    DEBUG_LOG("DocID: " << docID);
+    // DEBUG_LOG("DocID: " << docID);
 
     // grab all the keywords and lookup for each keyword and create a publish request
     while (iss >> kw) {
       uint32_t key = PennKeyHelper::CreateShaKey(kw); // create a key for the keyword
       uint32_t tid = m_chord->Lookup(key); // lookup for keyword
       m_pendingPublishes[tid] = std::make_pair(kw, docID); // store in pending publishes
-      DEBUG_LOG("Keyword: " << kw << " TID: " << tid);
+      // DEBUG_LOG("Keyword: " << kw << " TID: " << tid);
     }
   }
 
@@ -439,7 +439,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
   // lookup success
   auto it = m_pendingPublishes.find(tid);
   if (it == m_pendingPublishes.end()) {
-    DEBUG_LOG("Lookup success for unknown transaction ID");
+    // DEBUG_LOG("Lookup success for unknown transaction ID");
     return;
   }
   
@@ -471,12 +471,12 @@ PennSearch::HandleChordLookupFailure(uint32_t tid)
   // lookup failure for unknown transaction ID
   auto it = m_pendingPublishes.find(tid);
   if (it == m_pendingPublishes.end()) {
-    DEBUG_LOG("Lookup failure for unknown transaction ID");
+    // DEBUG_LOG("Lookup failure for unknown transaction ID");
     return;
   }
   else {
     m_pendingPublishes.erase(it); // remove from pending publishes after lookup failure
-    DEBUG_LOG("Lookup failure for transaction ID: " << tid);
+    // DEBUG_LOG("Lookup failure for transaction ID: " << tid);
   }
 }
 
