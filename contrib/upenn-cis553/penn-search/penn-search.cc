@@ -403,7 +403,11 @@ PennSearch::PublishMetadataFile(std::string filename)
 
     std::string kw;
     while (iss >> kw) {
-      invertedLists[kw].push_back(docID);
+      uint32_t key = PennKeyHelper::CreateShaKey(kw); // create a key for the keyword
+      // change call to m_chord->ChordLookup(key, transactionId)
+      uint32_t tid = m_chord->Lookup(key); // lookup for keyword
+      m_pendingPublishes[tid] = std::make_pair(kw, docID); // store in pending publishes
+      // DEBUG_LOG("Keyword: " << kw << " TID: " << tid);
     }
   }
   in.close();
@@ -415,6 +419,7 @@ PennSearch::PublishMetadataFile(std::string filename)
     const std::vector<std::string>& docIDs = entry.second;
 
     uint32_t key = PennKeyHelper::CreateShaKey(keyword);
+    // change call to m_chord->ChordLookup(key, transactionId)
     uint32_t tid = m_chord->Lookup(key);
     m_pendingPublishes[tid] = std::make_pair(keyword, docIDs);
   }
