@@ -49,8 +49,7 @@ PennChord::PennChord ()
   m_currentTransactionId = m_uniformRandomVariable->GetValue (0x00000000, 0xFFFFFFFF);
 
   // set finger table size and resize actual finger table
-  // m_fingerTableSize = 32;
-  m_fingerTableSize = 6;
+  m_fingerTableSize = 32;
   m_fingerTable.resize(m_fingerTableSize);
 
   // set nextFingerToFix to first entry and mark fingerTable as not initialzed yet
@@ -114,7 +113,7 @@ PennChord::StopApplication (void)
       m_socket = 0;
     }
 
-  // Cancel timers
+  // Cancel timers and trackers
   m_auditPingsTimer.Cancel ();
 
   m_pingTracker.clear ();
@@ -122,6 +121,8 @@ PennChord::StopApplication (void)
   m_stabilizeTimer.Cancel ();
 
   m_fixFingerTimer.Cancel ();
+
+  m_pendingFingers.clear();
 }
 
 void
@@ -376,18 +377,10 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
 
-    // CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(requestorIp), idToFind));
-
-    // Ipv4Address succ = (selfId==idToFind ? GetLocalAddress() : m_successor);
-    // CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(succ), idToFind));
-
     //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
   else
   {
-    // int idx = ClosestPrecedingFinger(idToFind);
-    // Ipv4Address nextHopIp = (idx >= 0) ? m_fingerTable[idx].finger_ip : m_successor;
-    // uint16_t nextHopPort = (idx >= 0 ? m_fingerTable[idx].finger_port : m_appPort);
     Ipv4Address nextHopIp = m_successor;
     CHORD_LOG("NODE GOING TO: " << ReverseLookup(nextHopIp));
     
@@ -427,12 +420,6 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   PennChordMessage::FindSuccessorRsp rsp = message.GetFindSuccessorRsp();
   Ipv4Address successorIp = rsp.successorIp;
 
-  m_successor = successorIp;
-  // if (!m_fingerTableInitialized) {
-  //   InitFingerTable();
-  //   m_fingerTableInitialized = true;
-  // }
-
   // get transaction id
   uint32_t tx = message.GetTransactionId();
 
@@ -458,6 +445,10 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
     // m_fingerTable[idx].finger_port = m_appPort;
     m_fingerTable[idx].finger_id = PennKeyHelper::CreateShaKey(successorIp);
     m_pendingFingers.erase(txId);
+  }
+  else
+  {
+    m_successor = successorIp;
   }
 
   if (!m_lookupCallback.IsNull())
@@ -790,7 +781,15 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
 void
 PennChord::InitFingerTable()
 {
-  CHORD_LOG("Entered InitFingerTable");
+  CHORD_LOG("Entered InitFingerTable method");
+
+  // check if finger table is already initialized
+  if (fingerTableInitialized)
+  {
+    CHORD_LOG("Finger table already initialized");
+    return;
+  }
+
   // loop over all finger table entries
   for (uint32_t i = 0; i < m_fingerTableSize; i++) {
     // calculate start = id + 2^i mod 2^32
@@ -799,18 +798,6 @@ PennChord::InitFingerTable()
     // store start of current index in finger table, initialize other fields
     m_fingerTable[i].start = start;
     m_fingerTable[i].finger_ip = Ipv4Address::GetAny();
-    // m_fingerTable[i].finger_id = 0;
-    // m_fingerTable[i].finger_port = 0;
-
-    // // find successor of start
-    // uint32_t tx = GetNextTransactionId();
-    // m_pendingFingers[tx] = i;
-    // PennChordMessage msg(PennChordMessage::FIND_SUCCESSOR_REQ, tx);
-    // msg.SetFindSuccessorReq(start, GetLocalAddress());
-    // Ptr<Packet> pkt = Create<Packet>();
-    // pkt->AddHeader(msg);
-    // m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
-    // CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, start));
     m_fingerTable[i].finger_id = m_nodeHash;
   }
 
@@ -825,12 +812,17 @@ PennChord::FixFingerTable()
   // if finger table is not initialized, reschedule and exit
   if (!m_fingerTableInitialized)
     {
+      initFingerTable();
       m_fixFingerTimer.Schedule(Seconds(1));
       return;
     }
-
   // get index of next finger to be fixed
   uint32_t nextFinger = m_nextFingerToFix;
+
+  if (nextFinger >= m_fingerTableSize)
+    {
+      m_nextFingerToFix = 0;
+    }
   
   // look up successor of "start" of finger being fixed
   uint32_t target = m_fingerTable[nextFinger].start;
