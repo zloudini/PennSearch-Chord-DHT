@@ -49,7 +49,8 @@ PennChord::PennChord ()
   m_currentTransactionId = m_uniformRandomVariable->GetValue (0x00000000, 0xFFFFFFFF);
 
   // set finger table size and resize actual finger table
-  m_fingerTableSize = 32;
+  // m_fingerTableSize = 32;
+  m_fingerTableSize = 6;
   m_fingerTable.resize(m_fingerTableSize);
 
   // set nextFingerToFix to first entry and mark fingerTable as not initialzed yet
@@ -377,32 +378,24 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
     // CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(requestorIp), idToFind));
 
-    Ipv4Address succ = (selfId==idToFind ? GetLocalAddress() : m_successor);
-    CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(succ), idToFind));
+    // Ipv4Address succ = (selfId==idToFind ? GetLocalAddress() : m_successor);
+    // CHORD_LOG(GraderLogs::GetLookupResultLogStr(m_nodeHash, idToFind, ReverseLookup(succ), idToFind));
 
     //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... replying with successor " << ReverseLookup(m_successor));
   } 
   else
   {
-    int idx = ClosestPrecedingFinger(idToFind);
-    Ipv4Address nextHopIp = (idx >= 0) ? m_fingerTable[idx].finger_ip : m_successor;
-    uint16_t nextHopPort = (idx >= 0 ? m_fingerTable[idx].finger_port : m_appPort);
-
-    // scan finger table to find its ip+port
-    // for (auto &e : m_fingerTable)
-    // {
-    //   if (e.finger_id == nextHopIp)
-    //   {
-    //     nextHopIp = e.finger_ip;
-    //     nextHopPort = e.finger_port;
-    //     break;
-    //   }
-    // }
+    // int idx = ClosestPrecedingFinger(idToFind);
+    // Ipv4Address nextHopIp = (idx >= 0) ? m_fingerTable[idx].finger_ip : m_successor;
+    // uint16_t nextHopPort = (idx >= 0 ? m_fingerTable[idx].finger_port : m_appPort);
+    Ipv4Address nextHopIp = m_successor;
+    CHORD_LOG("NODE GOING TO: " << ReverseLookup(nextHopIp));
+    
     // fallback to successor if nothing matched
     if (nextHopIp == Ipv4Address::GetAny())
     {
       nextHopIp = m_successor;
-      nextHopPort = m_appPort;
+      // nextHopPort = m_appPort;
     }
     
     // forward to successor
@@ -415,12 +408,13 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
       return;
     }
 
-    m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, nextHopPort));
+    // m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, nextHopPort));
+    m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, m_appPort));
 
     // CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(m_successor),  PennKeyHelper::CreateShaKey(m_successor), idToFind));
-    auto hopHash = PennKeyHelper::CreateShaKey(nextHopIp);
+    // auto hopHash = PennKeyHelper::CreateShaKey(nextHopIp);
     
-    CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(nextHopIp), hopHash, idToFind));
+    // CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(nextHopIp), hopHash, idToFind));
 
     //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
   }
@@ -434,10 +428,10 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   Ipv4Address successorIp = rsp.successorIp;
 
   m_successor = successorIp;
-  if (!m_fingerTableInitialized) {
-    InitFingerTable();
-    m_fingerTableInitialized = true;
-  }
+  // if (!m_fingerTableInitialized) {
+  //   InitFingerTable();
+  //   m_fingerTableInitialized = true;
+  // }
 
   // get transaction id
   uint32_t tx = message.GetTransactionId();
@@ -461,7 +455,7 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
     // update finger table then erase transactionId from pendingFingers
     m_fingerTable[idx].finger_ip = m_successor;
-    m_fingerTable[idx].finger_port = m_appPort;
+    // m_fingerTable[idx].finger_port = m_appPort;
     m_fingerTable[idx].finger_id = PennKeyHelper::CreateShaKey(successorIp);
     m_pendingFingers.erase(txId);
   }
@@ -796,32 +790,28 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
 void
 PennChord::InitFingerTable()
 {
+  CHORD_LOG("Entered InitFingerTable");
   // loop over all finger table entries
   for (uint32_t i = 0; i < m_fingerTableSize; i++) {
     // calculate start = id + 2^i mod 2^32
-    uint32_t start = m_nodeHash + (1u << i);
+    uint32_t start = m_nodeHash + (1U << i);
 
     // store start of current index in finger table, initialize other fields
     m_fingerTable[i].start = start;
     m_fingerTable[i].finger_ip = Ipv4Address::GetAny();
-    m_fingerTable[i].finger_id = 0;
-    m_fingerTable[i].finger_port = 0;
+    // m_fingerTable[i].finger_id = 0;
+    // m_fingerTable[i].finger_port = 0;
 
-    // find successor of start
-    uint32_t tx = GetNextTransactionId();
-    m_pendingFingers[tx] = i;
-    PennChordMessage msg(PennChordMessage::FIND_SUCCESSOR_REQ, tx);
-    msg.SetFindSuccessorReq(start, GetLocalAddress());
-    Ptr<Packet> pkt = Create<Packet>();
-    pkt->AddHeader(msg);
-
-    if (m_successor == Ipv4Address::GetAny())
-    {
-      CHORD_LOG("Error: m_successor is empty");
-      return;
-    }
-    m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
-    CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, start));
+    // // find successor of start
+    // uint32_t tx = GetNextTransactionId();
+    // m_pendingFingers[tx] = i;
+    // PennChordMessage msg(PennChordMessage::FIND_SUCCESSOR_REQ, tx);
+    // msg.SetFindSuccessorReq(start, GetLocalAddress());
+    // Ptr<Packet> pkt = Create<Packet>();
+    // pkt->AddHeader(msg);
+    // m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
+    // CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, start));
+    m_fingerTable[i].finger_id = m_nodeHash;
   }
 
   // reset nextFingerToFix and set finger table as initialized
@@ -863,7 +853,7 @@ PennChord::FixFingerTable()
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
   // autograder log
-  CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, target));
+  // CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, target));
 
   // advance m_nextFingerToFix and schedule next finger fix
   m_nextFingerToFix = (nextFinger + 1) % m_fingerTableSize;

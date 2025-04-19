@@ -125,7 +125,7 @@ class PennChord : public PennApplication
       uint32_t start;         // (nodeId + 2^i) % 2^32
       uint32_t finger_id;     // id of successor of start
       Ipv4Address finger_ip;  // ip of successor of start
-      uint32_t finger_port;   // port of successor of start
+      // uint32_t finger_port;   // port of successor of start
     };
 
     // finger table initilization
