@@ -417,6 +417,7 @@ PennSearch::PublishMetadataFile(std::string filename)
     // grab all the keywords and lookup for each keyword and create a publish request
     while (iss >> kw) {
       uint32_t key = PennKeyHelper::CreateShaKey(kw); // create a key for the keyword
+      // change call to m_chord->ChordLookup(key, transactionId)
       uint32_t tid = m_chord->Lookup(key); // lookup for keyword
       m_pendingPublishes[tid] = std::make_pair(kw, docID); // store in pending publishes
       // DEBUG_LOG("Keyword: " << kw << " TID: " << tid);
