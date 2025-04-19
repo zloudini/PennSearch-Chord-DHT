@@ -118,7 +118,7 @@ PennSearch::StartApplication (void)
   // Start timers
   m_auditPingsTimer.Schedule (m_pingTimeout);
 
-  // set lookup success callback
+  // set lookup success and failure callbacks
   m_chord->SetLookupSuccessCallback(MakeCallback(&PennSearch::HandleChordLookupSuccess, this));
   m_chord->SetLookupFailureCallback(MakeCallback(&PennSearch::HandleChordLookupFailure, this));
 }
@@ -379,6 +379,7 @@ PennSearch::SetSearchVerbose (bool on)
 
 /**
  * Publish metadata file to map: <transaction id, <keyword, docID>>
+ * For each (keyword,docID), do a Chord lookup (m_chord->Lookup(key)) and stash that lookup’s transaction‑id mapping (kw,docID) in m_pendingPublishes
  * \param filename The metadata file to publish
  */
 void
@@ -388,20 +389,22 @@ PennSearch::PublishMetadataFile(std::string filename)
   // example: Doc23 keywordA keywordB …
 
   // grab the line
-  std::ifstream in(filename);
+  std::string filepath = "keys/" + filename; // need to make sure the filepath is correct
+  std::ifstream in(filepath);
 
   if (!in.is_open()) {
-    ERROR_LOG("Failed to open metadata file: " << filename);
+    ERROR_LOG("Failed to open metadata file: " << filepath);
     return;
   }
 
   // clear pending publishes to avoid duplicates for a new publish
   m_pendingPublishes.clear();
 
+  // parse the inverted dictionary file
   std::string line;
   while (std::getline(in, line)) {
     // prepare for reading in file data
-    istringstream iss(line);
+    std::istringstream iss(line);
     std::string docID;
     std::vector<std::string> keywords;
 
@@ -409,23 +412,29 @@ PennSearch::PublishMetadataFile(std::string filename)
     iss >> docID;
     std::string kw;
 
+    DEBUG_LOG("DocID: " << docID);
+
     // grab all the keywords and lookup for each keyword and create a publish request
     while (iss >> kw) {
-      uint32_t key = PennKeyHelper::CreateShaKey(kw);
-      uint32_t tid = m_chord->Lookup(key);
-      m_pendingPublishes[tid] = std::make_pair(kw, docID);
+      uint32_t key = PennKeyHelper::CreateShaKey(kw); // create a key for the keyword
+      uint32_t tid = m_chord->Lookup(key); // lookup for keyword
+      m_pendingPublishes[tid] = std::make_pair(kw, docID); // store in pending publishes
+      DEBUG_LOG("Keyword: " << kw << " TID: " << tid);
     }
   }
+
+  // close the file
   in.close();
 }
 
 /**
- * Handle chord lookup success
+ * Handle chord lookup success callback
+ * Pull back out the (keyword,docID), log the “PUBLISH” event, then ship a PUBLISH_REQ to the node that owns that key.
  * \param tid The transaction id of the lookup
- * \param sourceAddress The source address of the lookup
+ * \param owner The owner of the publish keyword
  */
 void
-PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address sourceAddress)
+PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 {
   // lookup success
   auto it = m_pendingPublishes.find(tid);
@@ -433,25 +442,27 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address sourceAddress)
     DEBUG_LOG("Lookup success for unknown transaction ID");
     return;
   }
+  
   // unpack publish request
   std::string keyword = it->second.first;
   std::string docID = it->second.second;
   SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
 
   // create publish request
+  // send the target IP address to the node that owns the publish keyword
   PennSearchMessage req = PennSearchMessage(PennSearchMessage::PUBLISH_REQ, tid);
   req.SetPublishReq(keyword, docID);
 
-  // send publish response
+  // send publish request to node
   Ptr<Packet> packet = Create<Packet>();
   packet->AddHeader(req);
-  m_socket->SendTo(packet, 0, InetSocketAddress(sourceAddress, m_appPort));
+  m_socket->SendTo(packet, 0, InetSocketAddress(owner, m_appPort));
 
   // wait for publish response from node to erase from pending publishes
 }
 
 /**
- * Handle chord lookup failure
+ * Handle chord lookup failure callback
  * \param tid The transaction id of the lookup
  */
 void
@@ -461,14 +472,17 @@ PennSearch::HandleChordLookupFailure(uint32_t tid)
   auto it = m_pendingPublishes.find(tid);
   if (it == m_pendingPublishes.end()) {
     DEBUG_LOG("Lookup failure for unknown transaction ID");
+    return;
   }
   else {
     m_pendingPublishes.erase(it); // remove from pending publishes after lookup failure
+    DEBUG_LOG("Lookup failure for transaction ID: " << tid);
   }
 }
 
 /**
  * Process publish request
+ * Append docID into node's in‑memory inverted index, log the “STORE” event, and ack the sender with a PUBLISH_RSP.
  * \param message The publish request message
  * \param sourceAddress The source address of the publish request
  * \param sourcePort The source port of the publish request
@@ -499,6 +513,7 @@ PennSearch::ProcessPublishReq (PennSearchMessage message, Ipv4Address sourceAddr
 
 /**
  * Process publish response
+ * When the original publisher sees the ack, it clears that tid from m_pendingPublishes
  * \param message The publish response message
  * \param sourceAddress The source address of the publish response
  */

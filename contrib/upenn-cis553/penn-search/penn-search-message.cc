@@ -445,7 +445,7 @@ PennSearchMessage::SetPublishRsp ()
  * \return The publish response
  */
 PennSearchMessage::PublishRsp
-PennSearchMessage::GetPublishRsp () const
+PennSearchMessage::GetPublishRsp ()
 {
   return m_message.publishRsp;
 }

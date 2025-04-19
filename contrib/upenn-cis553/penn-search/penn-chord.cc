@@ -668,4 +668,17 @@ PennChord::SetPingRecvCallback (Callback <void, Ipv4Address, std::string> pingRe
   m_pingRecvFn = pingRecvFn;
 }
 
+/** LOOKUP callbacks **/
+void
+PennChord::SetLookupSuccessCallback(Callback <void, uint32_t, Ipv4Address> lookupSuccessFn)
+{
+  m_lookupSuccessFn = lookupSuccessFn;
+}
+
+
+void
+PennChord::SetLookupFailureCallback(Callback <void, uint32_t> lookupFailureFn)
+{
+  m_lookupFailureFn = lookupFailureFn;
+}
 
