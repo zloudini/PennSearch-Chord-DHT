@@ -21,6 +21,7 @@
 #include "ns3/grader-logs.h"
 #include <sstream>
 #include <fstream>
+#include <algorithm>
 
 #include "ns3/random-variable-stream.h"
 #include "ns3/inet-socket-address.h"
@@ -379,7 +380,8 @@ PennSearch::SetSearchVerbose (bool on)
 
 /**
  * Publish metadata file to map: <transaction id, <keyword, docID>>
- * For each (keyword,docID), do a Chord lookup (m_chord->Lookup(key)) and stash that lookup's transaction-id mapping (kw,docID) in m_pendingPublishes
+ * 1) Read file, build invertedLists: keyword → all docIDs
+ * 2) For each unique keyword, fire exactly one Chord lookup and map tid → (keyword, all its docIDs)
  * \param filename The metadata file to publish
  */
 void
@@ -387,42 +389,43 @@ PennSearch::PublishMetadataFile(std::string filename)
 {
   std::string filepath = "keys/" + filename;
   std::ifstream in(filepath);
-
   if (!in.is_open()) {
     ERROR_LOG("Failed to open metadata file: " << filepath);
     return;
   }
 
-  // parse the inverted dictionary file
+  // 1) Read file, build invertedLists: keyword → all docIDs
   std::map<std::string, std::vector<std::string>> invertedLists;
   std::string line;
   while (std::getline(in, line)) {
     std::istringstream iss(line);
     std::string docID;
     iss >> docID;
-
     std::string kw;
     while (iss >> kw) {
-      uint32_t key = PennKeyHelper::CreateShaKey(kw); // create a key for the keyword
-      // change call to m_chord->ChordLookup(key, transactionId)
-      uint32_t tid = m_chord->Lookup(key); // lookup for keyword
-      m_pendingPublishes[tid] = std::make_pair(kw, docID); // store in pending publishes
-      // DEBUG_LOG("Keyword: " << kw << " TID: " << tid);
+      // check if docID is already in vector for this keyword
+      if (std::find(invertedLists[kw].begin(), invertedLists[kw].end(), docID) == invertedLists[kw].end()) {
+        invertedLists[kw].push_back(docID);
+      }
     }
   }
   in.close();
 
-  // for each keyword, lookup the transaction id and store in pending publishes
-  // one lookup covers n documents
-  for (const auto& entry : invertedLists) {
+  // 2) For each unique keyword, fire exactly one Chord lookup and map tid → (keyword, all its docIDs)
+  for (auto const& entry : invertedLists) {
+    // get keyword and docIDs
     const std::string& keyword = entry.first;
-    const std::vector<std::string>& docIDs = entry.second;
+    const auto& docIDs = entry.second;
 
+    // lookup keyword
     uint32_t key = PennKeyHelper::CreateShaKey(keyword);
-    // change call to m_chord->ChordLookup(key, transactionId)
     uint32_t tid = m_chord->Lookup(key);
+
+    // stash the whole vector of docIDs under this tid
     m_pendingPublishes[tid] = std::make_pair(keyword, docIDs);
   }
+
+  // DEBUG_LOG("Pending publishes: " << m_pendingPublishes.size());
 }
 
 /**
