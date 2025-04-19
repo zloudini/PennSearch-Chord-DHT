@@ -74,7 +74,7 @@ class PennChord : public PennApplication
     void Stabilize();
     void ProcessStabilizeReq(PennChordMessage message);
     void ProcessStabilizeRsp(PennChordMessage message);
-    bool IsInBetween(uint32_t start, uint32_t target, uint32_t end);
+    bool IsInBetween(uint32_t start, uint32_t target, uint32_t end) const;
 
     void ProcessNotifcationPkt(PennChordMessage message);
 
@@ -84,6 +84,11 @@ class PennChord : public PennApplication
     void Leave();
     void ProcessLeaveSuccessor(PennChordMessage message);
     void ProcessLeavePredecessor(PennChordMessage message);
+
+    // lookup logic
+    void ChordLookup(uint32_t transactionId, uint32_t hashToFind);
+    void SetLookUpCallback(Callback<void, Ipv4Address, uint32_t> lookupCb);
+
 
   protected:
     virtual void DoDispose ();
@@ -106,6 +111,8 @@ class PennChord : public PennApplication
     Callback <void, Ipv4Address, std::string> m_pingFailureFn;
     Callback <void, Ipv4Address, std::string> m_pingRecvFn;
 
+    Callback <void, Ipv4Address, uint32_t> m_lookupCallback;
+
     // successor, predecessor, and nodeHash
     Ipv4Address m_predecessor;
     Ipv4Address m_successor;
@@ -116,6 +123,33 @@ class PennChord : public PennApplication
     Callback <void, uint32_t> m_lookupFailureFn;
 
     Timer m_stabilizeTimer;
+
+    // finger table timer to call FixFingerTable
+    Timer m_fixFingerTimer;
+
+    // finger table entry struct
+    struct FingerTableEntry
+    {
+      uint32_t start;         // (nodeId + 2^i) % 2^32
+      uint32_t finger_id;     // id of successor of start
+      Ipv4Address finger_ip;  // ip of successor of start
+      // uint32_t finger_port;   // port of successor of start
+    };
+
+    // finger table initilization
+    std::vector<FingerTableEntry> m_fingerTable;
+
+    // tracks finger table entries that are in the process of being fixed
+    std::map<uint32_t,uint32_t> m_pendingFingers;
+
+    uint32_t m_fingerTableSize;   // 32
+    uint32_t m_nextFingerToFix;   // cycles 0..31
+    bool m_fingerTableInitialized; // true if finger table is initialized
+
+    // finger table methods
+    void InitFingerTable();
+    void FixFingerTable();
+    int ClosestPrecedingFinger(uint32_t idToFind) const;
 };
 
 #endif

@@ -101,6 +101,8 @@ PennSearch::StartApplication (void)
   m_chord->SetPingSuccessCallback (MakeCallback (&PennSearch::HandleChordPingSuccess, this)); 
   m_chord->SetPingFailureCallback (MakeCallback (&PennSearch::HandleChordPingFailure, this));
   m_chord->SetPingRecvCallback (MakeCallback (&PennSearch::HandleChordPingRecv, this)); 
+
+  m_chord->SetLookUpCallback (MakeCallback (&PennSearch::HandleLookupResult, this));
   // Start Chord
   m_chord->SetStartTime (Simulator::Now());
   m_chord->Initialize();
@@ -186,6 +188,17 @@ PennSearch::ProcessCommand (std::vector<std::string> tokens)
     else if (command == "PUBLISH") {
       std::string filename = tokens[1];
       PublishMetadataFile(filename); // publish metadata file to map: <transaction id, <keyword, docID>>
+    }
+    else if (command == "LOOKUP") {
+      iterator ++;
+
+      std::string keywordToFind = *iterator;
+
+      Ipv4Address tempNodeIp = m_chord->ResolveNodeIpAddress(keywordToFind);
+
+      uint32_t idToFind = PennKeyHelper::CreateShaKey(tempNodeIp);
+
+      Lookup(idToFind);
     }
 }
 
@@ -308,6 +321,37 @@ uint32_t
 PennSearch::GetNextTransactionId ()
 {
   return m_currentTransactionId++;
+}
+
+// lookup logic
+void
+PennSearch::Lookup(uint32_t hashToFind) 
+{
+  uint32_t transactionId = GetNextTransactionId();
+
+  m_lookupTracker[transactionId] = hashToFind;
+
+  m_chord->ChordLookup(transactionId, hashToFind);
+}
+
+void
+PennSearch::HandleLookupResult(Ipv4Address owner, uint32_t transactionId)
+{
+  auto it = m_lookupTracker.find(transactionId);
+
+  if (it != m_lookupTracker.end()) {
+    uint32_t hashToFind = m_lookupTracker[transactionId];
+
+    m_lookupTracker.erase(transactionId);
+
+    ProcessLookupResult(owner, hashToFind);
+  }
+}
+
+void 
+PennSearch::ProcessLookupResult(Ipv4Address owner, uint32_t hashToFind)
+{
+  SEARCH_LOG("FOUND OWNER FOR HASH: " << PennKeyHelper::KeyToHexString(hashToFind) << " AT NODE: " << m_chord->ReverseLookup(owner) << " WITH HASH: " << PennKeyHelper::KeyToHexString(PennKeyHelper::CreateShaKey(owner)));
 }
 
 // Handle Chord Callbacks
