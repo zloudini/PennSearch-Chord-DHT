@@ -397,9 +397,6 @@ PennSearch::PublishMetadataFile(std::string filename)
     return;
   }
 
-  // clear pending publishes to avoid duplicates for a new publish
-  m_pendingPublishes.clear();
-
   // parse the inverted dictionary file
   std::string line;
   while (std::getline(in, line)) {
