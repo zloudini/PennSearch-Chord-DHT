@@ -429,9 +429,9 @@ PennSearch::SetSearchVerbose (bool on)
  * \param filename The metadata file to publish
  */
 void
-PennSearch::PublishMetadataFile(std::string filename)
+PennSearch::PublishMetadataFile(std::string filepath)
 {
-  std::string filepath = "keys/" + filename;
+  // we provide the filepath in the command line
   std::ifstream in(filepath);
   if (!in.is_open()) {
     ERROR_LOG("Failed to open metadata file: " << filepath);
