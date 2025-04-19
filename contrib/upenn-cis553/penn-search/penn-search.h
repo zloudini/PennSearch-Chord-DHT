@@ -63,7 +63,7 @@ class PennSearch : public PennApplication
     void HandleChordLookupSuccess (uint32_t tid, Ipv4Address owner);
     void HandleChordLookupFailure (uint32_t tid);
     void PublishMetadataFile(std::string filename);
-    std::map<uint32_t, std::pair<std::string, std::string>> m_pendingPublishes;
+    std::map<uint32_t, std::pair<std::string, std::vector<std::string>>> m_pendingPublishes;
 
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
