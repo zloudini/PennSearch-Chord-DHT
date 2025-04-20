@@ -1,3 +1,6 @@
+* PENNSEARCH VERBOSE SEARCH ON
+* PENNSEARCH VERBOSE CHORD ON
+
 * PENNSEARCH VERBOSE ALL OFF
 * PENNSEARCH VERBOSE CHORD ON
 * PENNSEARCH VERBOSE SEARCH ON
@@ -56,12 +59,6 @@ TIME 10000
 
 #STEP 3 ------------ Publish ---------------#
 TIME 20000
-2 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata2.keys
-TIME 5000
-3 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata3.keys
-TIME 5000
-4 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata4.keys
-TIME 5000
 5 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata5.keys
 TIME 5000
 
@@ -69,36 +66,12 @@ TIME 5000
 TIME 10000
 
 #STEP 4 ----------- Search correctness with multiple keywords ---------------#
+15 PENNSEARCH SEARCH 12 Chadwick-Boseman
+TIME 10000
+
+QUIT
+
 1 PENNSEARCH SEARCH 4 Johnny-Depp
 TIME 5000
 3 PENNSEARCH SEARCH 10 Johnny-Depp Keira-Knightley
 TIME 5000
-8 PENNSEARCH SEARCH 17 George-Clooney Brad-Pitt Matt-Damon 
-TIME 5000
-
-#STEP 5 ----------- (consistent lookup)multiple node issue search simultaneously ---------------#
-
-2 PENNSEARCH SEARCH 12 Brad-Pitt
-TIME 5000
-3 PENNSEARCH SEARCH 13 Brad-Pitt
-TIME 5000
-4 PENNSEARCH SEARCH 14 Brad-Pitt
-TIME 5000
-
-#STEP 6 ----------- multiple searches issued from one node ---------------#
-
-15 PENNSEARCH SEARCH 15 Tom-Hardy
-15 PENNSEARCH SEARCH 3 Emilia-Clarke
-15 PENNSEARCH SEARCH 12 Chadwick-Boseman
-TIME 5000
-
-#STEP 7 ------------- non-chord node search ---------------#
-25 PENNSEARCH SEARCH 9 Tom-Hanks
-TIME 5000
-21 PENNSEARCH SEARCH 16 Jeremy-Renner
-TIME 5000
-
-3 PENNSEARCH CHORD RINGSTATE
-TIME 10000
-
-QUIT

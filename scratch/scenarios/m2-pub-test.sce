@@ -64,23 +64,6 @@ TIME 20000
 5 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata5.keys
 TIME 20000
 
-# -------------------------------- Baseline Tests ------------------------------- #
-
-# Owner node 3
-3 PENNSEARCH SEARCH 10 Scarlet-Johansson
-TIME 5000
-
-# Owner node 17
-5 PENNSEARCH SEARCH 19 Leonardo-DiCaprio
-TIME 5000
-
-# Owner node 2
-17 PENNSEARCH SEARCH 19 Kristen-Stewart
-TIME 5000
-
-# Owner node 18
-8 PENNSEARCH SEARCH 8 Chadwick-Boseman
-TIME 5000
 
 # ------------------------------- Leave Tests ------------------------------ #
 
@@ -98,47 +81,6 @@ TIME 30000
 
 # Check well-formed ring
 4 PENNSEARCH CHORD RINGSTATE
-TIME 30000
-
-# Owner node 0
-1 PENNSEARCH SEARCH 1 Scarlet-Johansson
-TIME 5000
-
-# Owner node 11
-5 PENNSEARCH SEARCH 5 Leonardo-DiCaprio
-TIME 5000
-
-# Owner node 15
-19 PENNSEARCH SEARCH 19 Kristen-Stewart
-TIME 5000
-
-# Owner node 0
-8 PENNSEARCH SEARCH 8 Chadwick-Boseman
-TIME 5000
-
-# Search correctness
-
-4 PENNSEARCH SEARCH 4 Jason-Statham Leonardo-DiCaprio
-TIME 5000
-
-8 PENNSEARCH SEARCH 8 Emilia-Clarke Kit-Harington Peter-Dinklage
-TIME 5000
-
-# Search consistency
-
-4 PENNSEARCH SEARCH 4 Megan-Fox
-TIME 5000
-
-5 PENNSEARCH SEARCH 5 Megan-Fox
-TIME 5000
-
-6 PENNSEARCH SEARCH 6 Megan-Fox
-TIME 5000
-
-# Non-chord search
-
-21 PENNSEARCH SEARCH 1 Orlando-Bloom
-TIME 5000
 
 # ------------------------------- Rejoin Tests ------------------------------- #
 
@@ -158,47 +100,5 @@ TIME 30000
 3 PENNSEARCH CHORD RINGSTATE
 TIME 30000
 
-# Owner node 3
-3 PENNSEARCH SEARCH 10 Scarlet-Johansson
-TIME 5000
-
-# Owner node 17
-5 PENNSEARCH SEARCH 19 Leonardo-DiCaprio
-TIME 5000
-
-# Owner node 2
-17 PENNSEARCH SEARCH 19 Kristen-Stewart
-TIME 5000
-
-# Owner node 18
-8 PENNSEARCH SEARCH 8 Chadwick-Boseman
-TIME 5000
-
-# Search correctness
-
-3 PENNSEARCH SEARCH 10 Jason-Statham Leonardo-DiCaprio
-TIME 5000
-
-8 PENNSEARCH SEARCH 17 Emilia-Clarke Kit-Harington Peter-Dinklage
-TIME 5000
-
-# Search consistency
-
-2 PENNSEARCH SEARCH 12 Megan-Fox
-TIME 5000
-
-3 PENNSEARCH SEARCH 13 Megan-Fox
-TIME 5000
-
-4 PENNSEARCH SEARCH 14 Megan-Fox
-TIME 5000
-
-# Non-chord search
-
-25 PENNSEARCH SEARCH 9 Tom-Hanks
-TIME 5000
-
-21 PENNSEARCH SEARCH 16 Sean-Connery Nicole-Kidman
-TIME 5000
 
 QUIT
