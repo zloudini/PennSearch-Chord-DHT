@@ -63,6 +63,7 @@ class PennChord : public PennApplication
 
     // Leave Callback
     void SetLeaveCallback(Callback<void, Ipv4Address> leaveCb);
+    void SetRejoinCallback(Callback<void, Ipv4Address> rejoinCb);
 
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
@@ -123,6 +124,8 @@ class PennChord : public PennApplication
 
     // leave callbacks
     Callback<void, Ipv4Address> m_leaveCallback;
+    Callback<void, Ipv4Address> m_rejoinCallback;
+    void TriggerRejoinCallback();
 
     // Lookup callbacks
     Callback <void, uint32_t, Ipv4Address> m_lookupSuccessFn;
@@ -156,6 +159,9 @@ class PennChord : public PennApplication
     void InitFingerTable();
     void FixFingerTable();
     int ClosestPrecedingFinger(uint32_t idToFind) const;
+
+    // transaction ID for a packet sent during a rejoin
+    uint32_t m_joinTransactionId;
 };
 
 #endif

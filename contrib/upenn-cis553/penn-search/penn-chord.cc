@@ -87,7 +87,7 @@ PennChord::StartApplication (void)
   
   m_nodeHash = PennKeyHelper::CreateShaKey(GetLocalAddress());
   m_predecessor = Ipv4Address::GetAny();
-  // m_successor = GetLocalAddress(); // self is its own successor
+  m_successor = GetLocalAddress(); // self is its own successor
 
   // Configure timers
   m_auditPingsTimer.SetFunction (&PennChord::AuditPings, this);
@@ -313,10 +313,17 @@ PennChord::Join(Ipv4Address landmark)
 {
   Ipv4Address selfIp = GetLocalAddress();
   uint32_t myId = PennKeyHelper::CreateShaKey(selfIp);
-  m_successor = GetLocalAddress();
+  
 
   // packet overhead
   uint32_t transactionId = GetNextTransactionId();
+
+  // for rejoings
+  if(m_successor == Ipv4Address::GetAny())
+  {
+    m_joinTransactionId = transactionId;
+  }
+
   PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
   msg.SetFindSuccessorReq(myId, selfIp);
 
@@ -423,15 +430,12 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   {
     // get index of finger table entry in pendingFingers
     uint32_t idx = txId->second;
-
     // ensure index is within bounds
-    if (idx >= m_fingerTableSize)
-    {
-      CHORD_LOG("Error: Index out of bounds");
-      return;
-    }
-    
-
+    // if (idx >= m_fingerTableSize)
+    // {
+    //   CHORD_LOG("Error: Index out of bounds");
+    //   return;
+    // }
     // update finger table then erase transactionId from pendingFingers
     m_fingerTable[idx].finger_ip = successorIp;
     // m_fingerTable[idx].finger_port = m_appPort;
@@ -444,8 +448,13 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
     if (!m_lookupSuccessFn.IsNull())
     {
-      // CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp));
+      //CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
       m_lookupSuccessFn(tx, successorIp);
+    }
+
+    if (tx == m_joinTransactionId && !m_rejoinCallback.IsNull())
+    {
+      Simulator::Schedule(MilliSeconds(1000), &PennChord::TriggerRejoinCallback, this);
     }
   }
 
@@ -477,7 +486,7 @@ PennChord::Stabilize()
   // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
 
   // change to MilliSeconds?
-  m_stabilizeTimer.Schedule(Seconds(1));
+  m_stabilizeTimer.Schedule(MilliSeconds(500));
 }
 
 bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end) const
@@ -774,12 +783,6 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
   }
 }
 
-void
-PennChord::SetLeaveCallback(Callback<void, Ipv4Address> leaveCB)
-{
-  m_leaveCallback = leaveCB;
-}
-
 /*Finger Table Methods*/
 
 void
@@ -815,7 +818,7 @@ PennChord::FixFingerTable()
   if (!m_fingerTableInitialized)
     {
       InitFingerTable();
-      m_fixFingerTimer.Schedule(MilliSeconds(100));
+      m_fixFingerTimer.Schedule(Seconds(1));
       return;
     }
   // get index of next finger to be fixed
@@ -955,3 +958,24 @@ PennChord::SetLookupFailureCallback(Callback <void, uint32_t> lookupFailureFn)
   m_lookupFailureFn = lookupFailureFn;
 }
 
+/* LEAVE AND REJOINING callbacks */
+void
+PennChord::SetLeaveCallback(Callback<void, Ipv4Address> leaveCB)
+{
+  m_leaveCallback = leaveCB;
+}
+
+void
+PennChord::SetRejoinCallback(Callback<void, Ipv4Address> rejoinCB)
+{
+  m_rejoinCallback = rejoinCB;
+}
+
+void
+PennChord::TriggerRejoinCallback()
+{
+  if (!m_rejoinCallback.IsNull()) {
+    //CHORD_LOG("Triggering REJOIN callback with successor: " << ReverseLookup(m_successor));
+    m_rejoinCallback(m_successor);
+  }
+}

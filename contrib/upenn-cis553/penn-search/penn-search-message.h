@@ -40,6 +40,7 @@ class PennSearchMessage : public Header
         // Define extra message types when needed 
         PUBLISH_REQ = 3,
         PUBLISH_RSP = 4,    
+        REJOIN_REQ = 5,
       };
 
     PennSearchMessage (PennSearchMessage::MessageType messageType, uint32_t transactionId);
@@ -130,6 +131,20 @@ class PennSearchMessage : public Header
         // no payload
       };
 
+    /**
+     * Rejoin Req: this is what a search node sends to a successor when it rejoins to get back it's documents
+     */
+    struct RejoinReq
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address requester;
+    };
+    
+
   private:
     struct
       {
@@ -137,6 +152,7 @@ class PennSearchMessage : public Header
         PingRsp pingRsp;
         PublishReq publishReq;
         PublishRsp publishRsp;
+        RejoinReq rejoinReq;
       } m_message;
     
   public:
@@ -183,6 +199,9 @@ class PennSearchMessage : public Header
      *  \param message Payload String
      */
     void SetPublishRsp ();
+
+    void SetRejoinReq (Ipv4Address requesterIp);
+    RejoinReq GetRejoinReq ();
 }; // class PennSearchMessage
 
 static inline std::ostream& operator<< (std::ostream& os, const PennSearchMessage& message)

@@ -67,6 +67,9 @@ class PennSearch : public PennApplication
 
     // Leave Callback handling 
     void HandleLeave(Ipv4Address successorIp);
+    void HandleRejoin(Ipv4Address successorIp);
+    void ProcessRejoin(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
+    std::map<uint32_t, std::pair<std::string, std::vector<std::string>>> m_pendingRejoin;
 
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);

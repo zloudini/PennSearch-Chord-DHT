@@ -72,6 +72,9 @@ PennSearchMessage::GetSerializedSize (void) const
       case PUBLISH_RSP:
         size += m_message.publishRsp.GetSerializedSize ();
         break;
+      case REJOIN_REQ:
+        size += m_message.rejoinReq.GetSerializedSize ();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -100,6 +103,9 @@ PennSearchMessage::Print (std::ostream &os) const
       case PUBLISH_RSP:
         m_message.publishRsp.Print (os);
         break;
+      case REJOIN_REQ:
+        m_message.rejoinReq.Print (os);
+        break;
       default:
         break;  
     }
@@ -126,6 +132,9 @@ PennSearchMessage::Serialize (Buffer::Iterator start) const
         break;
       case PUBLISH_RSP:
         m_message.publishRsp.Serialize (i);
+        break;
+      case REJOIN_REQ:
+        m_message.rejoinReq.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -155,6 +164,9 @@ PennSearchMessage::Deserialize (Buffer::Iterator start)
         break;
       case PUBLISH_RSP:
         size += m_message.publishRsp.Deserialize (i);
+        break;
+      case REJOIN_REQ:
+        size += m_message.rejoinReq.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -448,4 +460,43 @@ PennSearchMessage::PublishRsp
 PennSearchMessage::GetPublishRsp ()
 {
   return m_message.publishRsp;
+}
+
+/*RejoinReq*/
+uint32_t PennSearchMessage::RejoinReq::GetSerializedSize() const {
+  return IPV4_ADDRESS_SIZE;
+}
+
+void PennSearchMessage::RejoinReq::Print(std::ostream &os) const {
+  os << "Rejoin - requester = " << requester;
+}
+
+void PennSearchMessage::RejoinReq::Serialize(Buffer::Iterator &start) const {
+  uint32_t ip = requester.Get();
+  start.WriteHtonU32(ip);
+}
+
+uint32_t PennSearchMessage::RejoinReq::Deserialize(Buffer::Iterator &start) {
+  requester = Ipv4Address(start.ReadNtohU32());
+  return GetSerializedSize();
+}
+
+void
+PennSearchMessage::SetRejoinReq (Ipv4Address requesterIp)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = REJOIN_REQ;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == REJOIN_REQ);
+    }
+  m_message.rejoinReq.requester = requesterIp;
+}
+
+PennSearchMessage::RejoinReq
+PennSearchMessage::GetRejoinReq ()
+{
+  return m_message.rejoinReq;
 }

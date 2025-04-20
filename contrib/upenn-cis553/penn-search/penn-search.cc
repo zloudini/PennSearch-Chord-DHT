@@ -127,6 +127,7 @@ PennSearch::StartApplication (void)
 
   // leave callback
   m_chord->SetLeaveCallback(MakeCallback(&PennSearch::HandleLeave, this));
+  m_chord->SetRejoinCallback(MakeCallback(&PennSearch::HandleRejoin, this));
 }
 
 void
@@ -258,6 +259,9 @@ PennSearch::RecvMessage (Ptr<Socket> socket)
         break;
       case PennSearchMessage::PUBLISH_RSP:
         ProcessPublishRsp (message, sourceAddress, sourcePort);
+        break;
+      case PennSearchMessage::REJOIN_REQ:
+        ProcessRejoin(message, sourceAddress, sourcePort);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -492,32 +496,57 @@ void
 PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 {
   // lookup success
-  auto it = m_pendingPublishes.find(tid);
+  auto publishIt = m_pendingPublishes.find(tid);
   //SEARCH_LOG("SEARCHED FOR TRANSACTION ID: " << tid);
-  if (it == m_pendingPublishes.end()) {
-    //SEARCH_LOG("Lookup success for unknown transaction ID");
-    return;
+  if (publishIt != m_pendingPublishes.end()) {
+    // unpack publish request
+    std::string keyword = publishIt->second.first;
+    std::vector<std::string> docIDs = publishIt->second.second;
+
+    for (const auto& docID : docIDs) {
+      // log publish for grader
+      SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
+
+      // create publish request and send PUBLISH_REQ to owner
+      PennSearchMessage req = PennSearchMessage(PennSearchMessage::PUBLISH_REQ, tid);
+      req.SetPublishReq(keyword, docID);
+      Ptr<Packet> packet = Create<Packet>();
+      packet->AddHeader(req);
+      m_socket->SendTo(packet, 0, InetSocketAddress(owner, m_appPort));
+      // SEARCH_LOG("Publishing on Node: " << m_chord->ReverseLookup(owner))
+    }
+
+    // clean up pending publishes
+    m_pendingPublishes.erase(publishIt);
   }
 
-  // unpack publish request
-  std::string keyword = it->second.first;
-  std::vector<std::string> docIDs = it->second.second;
+  auto rejoinIt = m_pendingRejoin.find(tid);
 
-  for (const auto& docID : docIDs) {
-    // log publish for grader
-    SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
+  if (rejoinIt != m_pendingRejoin.end()) {
 
-    // create publish request and send PUBLISH_REQ to owner
-    PennSearchMessage req = PennSearchMessage(PennSearchMessage::PUBLISH_REQ, tid);
-    req.SetPublishReq(keyword, docID);
-    Ptr<Packet> packet = Create<Packet>();
-    packet->AddHeader(req);
-    m_socket->SendTo(packet, 0, InetSocketAddress(owner, m_appPort));
-    // SEARCH_LOG("Publishing on Node: " << m_chord->ReverseLookup(owner))
+    // SEARCH_LOG ("OWNER = " << ReverseLookup(owner));
+    if (owner != GetLocalAddress())
+    {
+      // unpack publish request
+      std::string keyword = rejoinIt->second.first;
+      std::vector<std::string> docIDs = rejoinIt->second.second;
+
+      for (const auto& docID : docIDs) {
+        // log publish for grader
+        SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
+
+        // create publish request and send PUBLISH_REQ to owner
+        PennSearchMessage req = PennSearchMessage(PennSearchMessage::PUBLISH_REQ, tid);
+        req.SetPublishReq(keyword, docID);
+        Ptr<Packet> packet = Create<Packet>();
+        packet->AddHeader(req);
+        m_socket->SendTo(packet, 0, InetSocketAddress(owner, m_appPort));
+        // SEARCH_LOG("Publishing on Node: " << m_chord->ReverseLookup(owner))
+      }
+    }
   }
 
-  // clean up pending publishes
-  m_pendingPublishes.erase(it);
+  // SEARCH_LOG("unknown type of request");
 }
 
 /**
@@ -611,6 +640,8 @@ PennSearch::HandleLeave(Ipv4Address successorIp)
       pkt->AddHeader(msg);
       m_socket->SendTo(pkt, 0, InetSocketAddress(successorIp, m_appPort));
 
+      SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, doc));
+
       // SEARCH_LOG("LEAVE: Sent tag (" << keyword << ", " << doc << ") to successor " << m_chord->ReverseLookup(successorIp));
       
     }
@@ -618,4 +649,43 @@ PennSearch::HandleLeave(Ipv4Address successorIp)
 
   m_invertedIndex.clear();
 
+}
+
+void
+PennSearch::HandleRejoin(Ipv4Address successorIp)
+{
+  // SEARCH_LOG("REJOIN: Requesting data from successor " << m_chord->ReverseLookup(successorIp));
+
+  PennSearchMessage msg = PennSearchMessage(PennSearchMessage::REJOIN_REQ, GetNextTransactionId());
+  msg.SetRejoinReq(GetLocalAddress());
+
+  Ptr<Packet> pkt = Create<Packet>();
+  pkt->AddHeader(msg);
+  m_socket->SendTo(pkt, 0, InetSocketAddress(successorIp, m_appPort));
+}
+
+void 
+PennSearch::ProcessRejoin(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
+{
+  //Ipv4Address requester = sourceAddress;
+  
+  // SEARCH_LOG("REJOIN: Processing request from " << m_chord->ReverseLookup(requester));
+
+  for (const auto& entry : m_invertedIndex)
+  {
+    const std::string& keyword = entry.first;
+    const auto& docs = entry.second;
+
+    // lookup keyword
+    uint32_t key = PennKeyHelper::CreateShaKey(keyword);
+    
+    // fire Chord lookup
+    // map tid → (keyword, all its docIDs)
+    uint32_t transactionId = GetNextTransactionId();
+    // stash the whole vector of docIDs under this tid
+    m_pendingRejoin[transactionId] = std::make_pair(keyword, docs);
+    m_chord->ChordLookup(transactionId, key);
+
+    // SEARCH_LOG("REJOIN: Sent (" << keyword << ", " << ") to " << m_chord->ReverseLookup(requester));
+  }
 }
