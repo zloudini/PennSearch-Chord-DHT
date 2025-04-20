@@ -444,6 +444,8 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   }
   else
   {
+    // CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
+
     m_successor = successorIp;
 
     if (!m_lookupSuccessFn.IsNull())
@@ -458,7 +460,6 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
     }
   }
 
-  //CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 }
 
 void
