@@ -52,7 +52,7 @@ TIME 10000
 3 PENNSEARCH CHORD RINGSTATE
 TIME 10000
 
-* PENNSEARCH VERBOSE CHORD ON
+* PENNSEARCH VERBOSE CHORD OFF
 
 #STEP 3 ------------ Publish ---------------#
 TIME 20000
@@ -64,9 +64,6 @@ TIME 5000
 TIME 5000
 5 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata5.keys
 TIME 5000
-
-3 PENNSEARCH CHORD RINGSTATE
-TIME 10000
 
 #STEP 4 ----------- Search correctness with multiple keywords ---------------#
 1 PENNSEARCH SEARCH 4 Johnny-Depp
@@ -89,7 +86,7 @@ TIME 5000
 
 15 PENNSEARCH SEARCH 15 Tom-Hardy
 15 PENNSEARCH SEARCH 3 Emilia-Clarke
-15 PENNSEARCH SEARCH 12 Chadwick-Boseman
+15 PENNSEARCH SEARCH 12 Chadwick-Boseemann
 TIME 5000
 
 #STEP 7 ------------- non-chord node search ---------------#
@@ -97,8 +94,5 @@ TIME 5000
 TIME 5000
 21 PENNSEARCH SEARCH 16 Jeremy-Renner
 TIME 5000
-
-3 PENNSEARCH CHORD RINGSTATE
-TIME 10000
 
 QUIT
