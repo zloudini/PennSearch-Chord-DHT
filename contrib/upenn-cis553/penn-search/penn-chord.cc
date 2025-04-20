@@ -453,7 +453,7 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
     if (!m_lookupSuccessFn.IsNull())
     {
-      //CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
+      CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
       m_lookupSuccessFn(tx, successorIp);
     }
 
@@ -496,9 +496,9 @@ PennChord::Stabilize()
 bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end) const
 {
   if (start < end) {
-    return (start < target && target < end);
+    return (start < target && target <= end);
   } else if (start > end) {
-    return (target > start || target < end);
+    return (target > start || target <= end);
   } else if (start == end) {
     return true;
   } else {
