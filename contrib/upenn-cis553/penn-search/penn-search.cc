@@ -652,7 +652,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 
     for (const auto& docID : docIDs) {
       // log publish for grader
-      // SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
+      SEARCH_LOG(GraderLogs::GetPublishLogStr(keyword, docID));
     }
 
     // SEARCH_LOG("Chord resolved key " << PennKeyHelper::KeyToHexString(PennKeyHelper::CreateShaKey(keyword)) << " to owner " << owner);
@@ -705,7 +705,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
     Ipv4Address requester = std::get<2>(searchIt->second);
     uint32_t keywordIndex = std::get<3>(searchIt->second);
 
-    //m_pendingSearches.erase(tid);
+    m_pendingSearches.erase(tid);
 
     PennSearchMessage message = PennSearchMessage (PennSearchMessage::SEARCH_REQ, tid);
     message.SetSearchReq (requester, keywords, docIds, keywordIndex);
