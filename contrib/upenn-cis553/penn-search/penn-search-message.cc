@@ -78,6 +78,9 @@ PennSearchMessage::GetSerializedSize (void) const
       case SEARCH_REQ:
         size += m_message.searchReq.GetSerializedSize ();
         break;
+      case SEARCH_RSP:
+        size += m_message.searchRsp.GetSerializedSize ();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -112,6 +115,9 @@ PennSearchMessage::Print (std::ostream &os) const
       case SEARCH_REQ:
         m_message.searchReq.Print (os);
         break;
+      case SEARCH_RSP:
+        m_message.searchRsp.Print (os);
+        break;
       default:
         break;  
     }
@@ -144,6 +150,9 @@ PennSearchMessage::Serialize (Buffer::Iterator start) const
         break;
       case SEARCH_REQ:
         m_message.searchReq.Serialize (i);
+        break;
+      case SEARCH_RSP:
+        m_message.searchRsp.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -179,6 +188,9 @@ PennSearchMessage::Deserialize (Buffer::Iterator start)
         break;
       case SEARCH_REQ: 
         size += m_message.searchReq.Deserialize (i);
+        break;
+      case SEARCH_RSP:
+        size += m_message.searchRsp.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -513,21 +525,23 @@ PennSearchMessage::GetRejoinReq ()
   return m_message.rejoinReq;
 }
 
+/* SEARCH_REQ */
 uint32_t PennSearchMessage::SearchReq::GetSerializedSize() const {
-  uint32_t size = IPV4_ADDRESS_SIZE;       // requester
-  size += sizeof(uint32_t);                // number of keywords
+  uint32_t size = sizeof(uint32_t);  // requester IP
+
+  size += sizeof(uint16_t);          // number of keywords
   for (const auto& keyword : keywords) {
-    size += sizeof(uint32_t);              // length prefix
-    size += keyword.size();                // keyword bytes
+    size += sizeof(uint16_t);        // length prefix
+    size += keyword.size();          // string bytes
   }
 
-  size += sizeof(uint32_t);                // number of docsSoFar
+  size += sizeof(uint16_t);          // number of docs
   for (const auto& doc : returnDocs) {
-    size += sizeof(uint32_t);              // length prefix
-    size += doc.size();                    // doc string bytes
+    size += sizeof(uint16_t);        // length prefix
+    size += doc.size();              // string bytes
   }
 
-  size += sizeof(uint32_t);                // keywordIndex
+  size += sizeof(uint16_t);          // keywordIndex
   return size;
 }
 
@@ -547,49 +561,49 @@ void PennSearchMessage::SearchReq::Print(std::ostream &os) const {
 }
 
 void PennSearchMessage::SearchReq::Serialize(Buffer::Iterator &start) const {
-  start.WriteHtonU32(requester.Get());
+  start.WriteU32(requester.Get());
 
   // Serialize keywords
-  start.WriteHtonU32(keywords.size());
+  start.WriteU16(keywords.size());
   for (const auto& keyword : keywords) {
-    start.WriteHtonU32(keyword.size());
-    start.Write(reinterpret_cast<const uint8_t*>(keyword.data()), keyword.size());
+    start.WriteU16(keyword.size());
+    start.Write((uint8_t*)keyword.data(), keyword.size());
   }
 
   // Serialize returnDocs
-  start.WriteHtonU32(returnDocs.size());
+  start.WriteU16(returnDocs.size());
   for (const auto& doc : returnDocs) {
-    start.WriteHtonU32(doc.size());
-    start.Write(reinterpret_cast<const uint8_t*>(doc.data()), doc.size());
+    start.WriteU16(doc.size());
+    start.Write((uint8_t*)doc.data(), doc.size());
   }
 
-  start.WriteHtonU32(keywordIndex);
+  start.WriteU16(keywordIndex);
 }
 
 uint32_t PennSearchMessage::SearchReq::Deserialize(Buffer::Iterator &start) {
-  requester = Ipv4Address(start.ReadNtohU32());
+  requester = Ipv4Address(start.ReadU32());
 
   // Deserialize keywords
-  uint32_t numKeywords = start.ReadNtohU32();
+  uint16_t numKeywords = start.ReadU16();
   keywords.clear();
-  for (uint32_t i = 0; i < numKeywords; ++i) {
-    uint32_t len = start.ReadNtohU32();
-    std::string kw(len, '\0');
-    start.Read(reinterpret_cast<uint8_t*>(&kw[0]), len);
-    keywords.push_back(kw);
+  for (uint16_t i = 0; i < numKeywords; ++i) {
+    uint16_t len = start.ReadU16();
+    std::string keyword(len, '\0');
+    start.Read((uint8_t*)keyword.data(), len);
+    keywords.push_back(keyword);
   }
 
-  // Deserialize docsSoFar
-  uint32_t numDocs = start.ReadNtohU32();
+  // Deserialize returnDocs
+  uint16_t numDocs = start.ReadU16();
   returnDocs.clear();
-  for (uint32_t i = 0; i < numDocs; ++i) {
-    uint32_t len = start.ReadNtohU32();
+  for (uint16_t i = 0; i < numDocs; ++i) {
+    uint16_t len = start.ReadU16();
     std::string doc(len, '\0');
-    start.Read(reinterpret_cast<uint8_t*>(&doc[0]), len);
+    start.Read((uint8_t*)doc.data(), len);
     returnDocs.push_back(doc);
   }
 
-  keywordIndex = start.ReadNtohU32();
+  keywordIndex = start.ReadU16();
 
   return GetSerializedSize();
 }
@@ -615,4 +629,72 @@ PennSearchMessage::SearchReq
 PennSearchMessage::GetSearchReq ()
 {
   return m_message.searchReq;
+}
+
+
+/* SEARCH_RSP */
+uint32_t PennSearchMessage::SearchRsp::GetSerializedSize() const {
+  uint32_t size = IPV4_ADDRESS_SIZE;
+  size += sizeof(uint32_t); // result count
+  for (const auto& result : results) {
+    size += sizeof(uint32_t); // length
+    size += result.size();    // actual string
+  }
+  return size;
+}
+
+void PennSearchMessage::SearchRsp::Print(std::ostream &os) const {
+  os << "SearchRsp:: requester = " << requester << "\n";
+  os << "\n";
+  os << "SearchRsp:: results = ";
+  for (const auto& doc : results) {
+    os << doc << " ";
+  }
+  os << "\n";
+}
+
+void PennSearchMessage::SearchRsp::Serialize(Buffer::Iterator &start) const {
+  start.WriteHtonU32(requester.Get());
+
+  start.WriteHtonU32(results.size());
+  for (const auto& result : results) {
+    start.WriteHtonU32(result.size());
+    start.Write(reinterpret_cast<const uint8_t*>(result.data()), result.size());
+  }
+}
+
+uint32_t PennSearchMessage::SearchRsp::Deserialize(Buffer::Iterator &start) {
+  requester = Ipv4Address(start.ReadNtohU32());
+
+  uint32_t count = start.ReadNtohU32();
+  results.clear();
+  for (uint32_t i = 0; i < count; ++i) {
+    uint32_t len = start.ReadNtohU32();
+    std::string result(len, '\0');
+    start.Read(reinterpret_cast<uint8_t*>(&result[0]), len);
+    results.push_back(result);
+  }
+
+  return GetSerializedSize();
+}
+
+void
+PennSearchMessage::SetSearchRsp (Ipv4Address requester, std::vector<std::string>& returnDocs)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = SEARCH_RSP;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == SEARCH_RSP);
+    }
+  m_message.searchRsp.requester = requester;
+  m_message.searchRsp.results = returnDocs;
+}
+
+PennSearchMessage::SearchRsp
+PennSearchMessage::GetSearchRsp ()
+{
+  return m_message.searchRsp;
 }

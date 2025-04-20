@@ -73,6 +73,7 @@ class PennSearch : public PennApplication
 
     // Publish
     void ProcessSearchReq(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
+    void ProcessSearchRsp(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
 
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
@@ -110,8 +111,13 @@ class PennSearch : public PennApplication
     // Inverted index <keyword, docIDs>
     std::map<std::string, std::vector<std::string>> m_invertedIndex;
 
-    // search tracker
-    std::map<uint32_t, std::pair<Ipv4Address, std::string>> m_pendingSearches; // tid → (original requester, keyword)
+    // search tracker: tid → (remaining keywords [to be passed on], currentDocs)
+    std::map<uint32_t, std::tuple<
+      std::vector<std::string>, // keywords
+      std::vector<std::string>, // current docs
+      Ipv4Address,              // requester
+      uint32_t                  // current keyword index
+    >> m_pendingSearches;
 
 };
 

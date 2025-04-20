@@ -158,6 +158,18 @@ class PennSearchMessage : public Header
       std::vector<std::string> returnDocs;
       uint32_t keywordIndex = 0;
     };
+
+    struct SearchRsp
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address requester;
+      std::vector<std::string> results;
+    };
+    
     
     
 
@@ -170,6 +182,7 @@ class PennSearchMessage : public Header
         PublishRsp publishRsp;
         RejoinReq rejoinReq;
         SearchReq searchReq;
+        SearchRsp searchRsp;
       } m_message;
     
   public:
@@ -222,6 +235,9 @@ class PennSearchMessage : public Header
 
     void SetSearchReq(Ipv4Address requester, std::vector<std::string>& keywords, std::vector<std::string>& returnDocs, uint32_t keywordIndex);
     SearchReq GetSearchReq();
+
+    void SetSearchRsp(Ipv4Address requester, std::vector<std::string>& returnDocs);
+    SearchRsp GetSearchRsp();
 }; // class PennSearchMessage
 
 static inline std::ostream& operator<< (std::ostream& os, const PennSearchMessage& message)

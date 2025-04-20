@@ -208,18 +208,25 @@ PennSearch::ProcessCommand (std::vector<std::string> tokens)
         return;
       }
 
+      ERROR_LOG("TARGET IP: " << targetIp);
+
+      // SEARCH_LOG("ATTEMPTING SEARCH TO : " << ReverseLookup(targetIp) << " IP: " << targetIp << " Keywords: ");
+      // for (const auto& keyword : keywords) {
+      //   SEARCH_LOG (keyword << " ");
+      // }
       uint32_t transactionId = GetNextTransactionId ();
       PennSearchMessage message = PennSearchMessage (PennSearchMessage::SEARCH_REQ, transactionId);
       std::vector<std::string> returnDocs;
-      message.SetSearchReq (m_local, keywords, returnDocs, 0);
+      uint32_t index = 0;
+      message.SetSearchReq (m_local, keywords, returnDocs, index);
       Ptr<Packet> packet = Create<Packet> ();
       packet->AddHeader (message);
       m_socket->SendTo (packet, 0 , InetSocketAddress (targetIp, m_appPort));
       
-      SEARCH_LOG ("Sent SEARCH_REQ to Node: " << ReverseLookup(targetIp) << " IP: " << targetIp << " Keywords: ");
-      for (const auto& keyword : keywords) {
-        SEARCH_LOG (keyword << " ");
-      }
+      // SEARCH_LOG ("Sent SEARCH_REQ to Node: " << ReverseLookup(targetIp) << " IP: " << targetIp << " Keywords: ");
+      // for (const auto& keyword : keywords) {
+      //   SEARCH_LOG (keyword << " ");
+      // }
     }
 }
 
@@ -281,7 +288,11 @@ PennSearch::RecvMessage (Ptr<Socket> socket)
         ProcessRejoin(message, sourceAddress, sourcePort);
         break;
       case PennSearchMessage::SEARCH_REQ:
+        // ERROR_LOG("RECIEVED SEACRCH REQ")
         ProcessSearchReq(message, sourceAddress, sourcePort);
+        break;
+      case PennSearchMessage::SEARCH_RSP:
+        ProcessSearchRsp(message, sourceAddress, sourcePort);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -510,10 +521,100 @@ PennSearch::PublishMetadataFile(std::string filepath)
 void
 PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
 {
+
+  // SEARCH_LOG("Handling SEARCH_REQ with transactionId: " << message.GetTransactionId());
+  
   // unpack search request
   PennSearchMessage::SearchReq req = message.GetSearchReq();
   std::vector<std::string> keywords = req.keywords;
+  Ipv4Address requester = req.requester;
+  uint32_t keywordIndex = req.keywordIndex;
+  std::vector<std::string> docIDs = req.returnDocs;
+  uint32_t tid = message.GetTransactionId();
+
+  if (keywords.empty()) {
+    ERROR_LOG("No keywords provided for search");
+    return;
+  }
+
+  if (keywordIndex >= keywords.size()) {
+    ERROR_LOG("Invalid keywordIndex: " << keywordIndex << " for keywords of size " << keywords.size());
+    return;
+  }
+
+  // SEARCH_LOG("SUCCESSFULLY UNPACKED " << message.GetTransactionId());
+
+  // SEARCH_LOG("USING PARAMS: requestor - " << requester << " tid = " << tid << " index = " << keywordIndex << " keywords = " );
+  // for (const auto& keyword : keywords) {
+  //        SEARCH_LOG (keyword << " ");
+  // }
+  // SEARCH_LOG("current docs = ");
+  // for (const auto& doc : docIDs) {
+  //   SEARCH_LOG (doc << " ");
+  // }
+
+  std::string currentKeyword = keywords[keywordIndex];
+
+  auto it = m_invertedIndex.find(currentKeyword);
+  // search locally first to see if we have the keyword
+  if (it != m_invertedIndex.end()) {
+    // SEARCH_LOG("FOUND KEYWORD " << currentKeyword);
+    // found the keyword in the inverted index
+    // insert them into the results vector that will be sent back
+    docIDs.insert(docIDs.end(), it->second.begin(), it->second.end());
+
+    // found last keyword, now look at next one
+    keywordIndex++;
+
+    // if there are no more then send a search response back to who requested it.
+    if(keywordIndex >= keywords.size()) {
+      // all keywords have been searched, send back the results
+      PennSearchMessage resp = PennSearchMessage(PennSearchMessage::SEARCH_RSP, tid);
+      resp.SetSearchRsp(requester, docIDs);
+      Ptr<Packet> packet = Create<Packet>();
+      packet->AddHeader(resp);
+      m_socket->SendTo(packet, 0, InetSocketAddress(requester, m_appPort));
+
+      // log search results for grader
+      // SEARCH_LOG(GraderLogs::GetSearchResultsLogStr(requester, docIDs));
+      return;
+
+      // reach here if there are still more keywords to find
+    } else {
+      
+      std::string nextKeyword = keywords[keywordIndex];
+      uint32_t key = PennKeyHelper::CreateShaKey(nextKeyword);
+
+      m_pendingSearches[tid] = std::make_tuple(keywords, docIDs, requester, keywordIndex);
+      m_chord->ChordLookup(tid, key);
+      // SEARCH_LOG("Sent with transactionId: " << tid << " looking for key: " << PennKeyHelper::KeyToHexString(key));
+    }
+  }
+  // if we don't own the keyword
+  else
+  {
+    std::string nextKeyword = keywords[keywordIndex];
+    uint32_t key = PennKeyHelper::CreateShaKey(nextKeyword);
+    m_pendingSearches[tid] = std::make_tuple(keywords, docIDs, requester, keywordIndex);
+    m_chord->ChordLookup(tid, key);
+    // SEARCH_LOG("Sent with transactionId: " << tid << " looking for key: " << PennKeyHelper::KeyToHexString(key));
+  }
+
 }
+
+void
+PennSearch::ProcessSearchRsp(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
+{
+  // unpack search response
+  PennSearchMessage::SearchRsp search_rsp = message.GetSearchRsp();
+  std::vector<std::string> results = search_rsp.results;
+  Ipv4Address requester = search_rsp.requester;
+  // uint32_t tid = message.GetTransactionId();
+
+  // log search results for grader
+  SEARCH_LOG(GraderLogs::GetSearchResultsLogStr(requester, results));
+}
+
 
 /**
  * Handle chord lookup success callback
@@ -578,13 +679,18 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
   auto searchIt = m_pendingSearches.find(tid);
   if (searchIt != m_pendingSearches.end()) {
     // unpack search request
-    Ipv4Address requester = searchIt->second.first;
-    std::string keyword = searchIt->second.second;
+    std::vector<std::string> keywords = std::get<0>(searchIt->second);
+    std::vector<std::string> docIds = std::get<1>(searchIt->second);
+    Ipv4Address requester = std::get<2>(searchIt->second);
+    uint32_t keywordIndex = std::get<3>(searchIt->second);
 
-    auto it = m_invertedIndex.find(keyword);
-    if (it != m_invertedIndex.end()) {
-      
-    }
+    PennSearchMessage message = PennSearchMessage (PennSearchMessage::SEARCH_REQ, tid);
+    message.SetSearchReq (requester, keywords, docIds, keywordIndex);
+    Ptr<Packet> packet = Create<Packet> ();
+    packet->AddHeader (message);
+    m_socket->SendTo (packet, 0 , InetSocketAddress (owner, m_appPort));
+
+    CHORD_LOG("SENDING SEARCH_REQ TO " << owner << "for KEYWORD: " << keywords[keywordIndex] << " with transactionId: " << tid);
   }
 
   // SEARCH_LOG("unknown type of request");
