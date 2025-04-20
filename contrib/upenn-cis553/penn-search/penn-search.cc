@@ -559,9 +559,31 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
     // SEARCH_LOG("FOUND KEYWORD " << currentKeyword);
     // found the keyword in the inverted index
     // insert them into the results vector that will be sent back
-    std::set<std::string> docSet(docIDs.begin(), docIDs.end());
-    docSet.insert(it->second.begin(), it->second.end());
-    docIDs.assign(docSet.begin(), docSet.end());
+
+    // if there are no docIDs to return, then just return the docs from the inverted index
+    if (docIDs.empty()) {
+      docIDs = it->second;
+    }
+    // if there are docIDs to return, then intersect the docIDs with the docs from the inverted index
+    else {
+      // initialize the docSet with the docIDs to return
+      std::set<std::string> docSet(docIDs.begin(), docIDs.end());
+
+      // if it's the first keyword, then just insert the docs from the inverted index
+      if (keywordIndex == 0) {
+        docSet.insert(it->second.begin(), it->second.end());
+      } 
+      // for subsequent keywords, intersect the current docSet with the new keyword's documents
+      else {
+          std::set<std::string> currentDocs(it->second.begin(), it->second.end());
+          std::set<std::string> intersection;
+          std::set_intersection(docSet.begin(), docSet.end(),
+                                currentDocs.begin(), currentDocs.end(),
+                                std::inserter(intersection, intersection.begin()));
+          docSet = intersection;
+        }
+        docIDs.assign(docSet.begin(), docSet.end());
+    }
 
 
     SEARCH_LOG(GraderLogs::GetInvertedListShipLogStr(currentKeyword, docIDs));
@@ -582,8 +604,6 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
       // log search results for grader
       // SEARCH_LOG(GraderLogs::GetSearchResultsLogStr(requester, docIDs));
       return;
-
-      // reach here if there are still more keywords to find
     } else {
       
       std::string nextKeyword = keywords[keywordIndex];
