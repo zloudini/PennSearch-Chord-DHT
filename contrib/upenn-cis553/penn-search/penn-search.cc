@@ -580,7 +580,7 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
     // assign the docIDs to the docIDs vector
     docIDs.assign(docSet.begin(), docSet.end());
 
-
+    // log the inverted list ship for grader
     SEARCH_LOG(GraderLogs::GetInvertedListShipLogStr(currentKeyword, docIDs));
 
     // iterate to the next keyword
