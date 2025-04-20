@@ -193,16 +193,33 @@ PennSearch::ProcessCommand (std::vector<std::string> tokens)
       std::string filename = tokens[1];
       PublishMetadataFile(filename); // publish metadata file to map: <transaction id, <keyword, docID>>
     }
-    else if (command == "LOOKUP") {
-      iterator ++;
+    else if (command == "SEARCH") {
+      if (tokens.size() < 3) {
+        ERROR_LOG ("Insufficient SEARCH params...");
+        return;
+      }
 
-      std::string keywordToFind = *iterator;
+      uint32_t targetNode = std::stoi(tokens[1]);
+      Ipv4Address targetIp = ResolveNodeIpAddress(std::to_string(targetNode));
+      std::vector<std::string> keywords(tokens.begin() + 2, tokens.end());
 
-      Ipv4Address tempNodeIp = m_chord->ResolveNodeIpAddress(keywordToFind);
+      if (keywords.size() == 0) {
+        ERROR_LOG ("No keywords provided for search");
+        return;
+      }
 
-      uint32_t idToFind = PennKeyHelper::CreateShaKey(tempNodeIp);
-
-      Lookup(idToFind);
+      uint32_t transactionId = GetNextTransactionId ();
+      PennSearchMessage message = PennSearchMessage (PennSearchMessage::SEARCH_REQ, transactionId);
+      std::vector<std::string> returnDocs;
+      message.SetSearchReq (m_local, keywords, returnDocs, 0);
+      Ptr<Packet> packet = Create<Packet> ();
+      packet->AddHeader (message);
+      m_socket->SendTo (packet, 0 , InetSocketAddress (targetIp, m_appPort));
+      
+      SEARCH_LOG ("Sent SEARCH_REQ to Node: " << ReverseLookup(targetIp) << " IP: " << targetIp << " Keywords: ");
+      for (const auto& keyword : keywords) {
+        SEARCH_LOG (keyword << " ");
+      }
     }
 }
 
@@ -262,6 +279,9 @@ PennSearch::RecvMessage (Ptr<Socket> socket)
         break;
       case PennSearchMessage::REJOIN_REQ:
         ProcessRejoin(message, sourceAddress, sourcePort);
+        break;
+      case PennSearchMessage::SEARCH_REQ:
+        ProcessSearchReq(message, sourceAddress, sourcePort);
         break;
       default:
         ERROR_LOG ("Unknown Message Type!");
@@ -486,6 +506,15 @@ PennSearch::PublishMetadataFile(std::string filepath)
   // DEBUG_LOG("Pending publishes: " << m_pendingPublishes.size());
 }
 
+/* SEARCH */
+void
+PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
+{
+  // unpack search request
+  PennSearchMessage::SearchReq req = message.GetSearchReq();
+  std::vector<std::string> keywords = req.keywords;
+}
+
 /**
  * Handle chord lookup success callback
  * Pull back out the (keyword,docID), log the "PUBLISH" event, then ship a PUBLISH_REQ to the node that owns that key.
@@ -543,6 +572,18 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
         m_socket->SendTo(packet, 0, InetSocketAddress(owner, m_appPort));
         // SEARCH_LOG("Publishing on Node: " << m_chord->ReverseLookup(owner))
       }
+    }
+  }
+
+  auto searchIt = m_pendingSearches.find(tid);
+  if (searchIt != m_pendingSearches.end()) {
+    // unpack search request
+    Ipv4Address requester = searchIt->second.first;
+    std::string keyword = searchIt->second.second;
+
+    auto it = m_invertedIndex.find(keyword);
+    if (it != m_invertedIndex.end()) {
+      
     }
   }
 

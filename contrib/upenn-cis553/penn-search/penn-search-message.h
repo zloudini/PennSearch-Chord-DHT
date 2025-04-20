@@ -41,6 +41,8 @@ class PennSearchMessage : public Header
         PUBLISH_REQ = 3,
         PUBLISH_RSP = 4,    
         REJOIN_REQ = 5,
+        SEARCH_REQ = 6,
+        SEARCH_RSP = 7,
       };
 
     PennSearchMessage (PennSearchMessage::MessageType messageType, uint32_t transactionId);
@@ -143,6 +145,20 @@ class PennSearchMessage : public Header
 
       Ipv4Address requester;
     };
+
+    struct SearchReq
+    {
+      void Print (std::ostream &os) const;
+      uint32_t GetSerializedSize (void) const;
+      void Serialize (Buffer::Iterator &start) const;
+      uint32_t Deserialize (Buffer::Iterator &start);
+
+      Ipv4Address requester;
+      std::vector<std::string> keywords;
+      std::vector<std::string> returnDocs;
+      uint32_t keywordIndex = 0;
+    };
+    
     
 
   private:
@@ -153,6 +169,7 @@ class PennSearchMessage : public Header
         PublishReq publishReq;
         PublishRsp publishRsp;
         RejoinReq rejoinReq;
+        SearchReq searchReq;
       } m_message;
     
   public:
@@ -202,6 +219,9 @@ class PennSearchMessage : public Header
 
     void SetRejoinReq (Ipv4Address requesterIp);
     RejoinReq GetRejoinReq ();
+
+    void SetSearchReq(Ipv4Address requester, std::vector<std::string>& keywords, std::vector<std::string>& returnDocs, uint32_t keywordIndex);
+    SearchReq GetSearchReq();
 }; // class PennSearchMessage
 
 static inline std::ostream& operator<< (std::ostream& os, const PennSearchMessage& message)

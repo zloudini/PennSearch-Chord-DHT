@@ -75,6 +75,9 @@ PennSearchMessage::GetSerializedSize (void) const
       case REJOIN_REQ:
         size += m_message.rejoinReq.GetSerializedSize ();
         break;
+      case SEARCH_REQ:
+        size += m_message.searchReq.GetSerializedSize ();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -106,6 +109,9 @@ PennSearchMessage::Print (std::ostream &os) const
       case REJOIN_REQ:
         m_message.rejoinReq.Print (os);
         break;
+      case SEARCH_REQ:
+        m_message.searchReq.Print (os);
+        break;
       default:
         break;  
     }
@@ -135,6 +141,9 @@ PennSearchMessage::Serialize (Buffer::Iterator start) const
         break;
       case REJOIN_REQ:
         m_message.rejoinReq.Serialize (i);
+        break;
+      case SEARCH_REQ:
+        m_message.searchReq.Serialize (i);
         break;
       default:
         NS_ASSERT (false);   
@@ -167,6 +176,9 @@ PennSearchMessage::Deserialize (Buffer::Iterator start)
         break;
       case REJOIN_REQ:
         size += m_message.rejoinReq.Deserialize (i);
+        break;
+      case SEARCH_REQ: 
+        size += m_message.searchReq.Deserialize (i);
         break;
       default:
         NS_ASSERT (false);
@@ -499,4 +511,108 @@ PennSearchMessage::RejoinReq
 PennSearchMessage::GetRejoinReq ()
 {
   return m_message.rejoinReq;
+}
+
+uint32_t PennSearchMessage::SearchReq::GetSerializedSize() const {
+  uint32_t size = IPV4_ADDRESS_SIZE;       // requester
+  size += sizeof(uint32_t);                // number of keywords
+  for (const auto& keyword : keywords) {
+    size += sizeof(uint32_t);              // length prefix
+    size += keyword.size();                // keyword bytes
+  }
+
+  size += sizeof(uint32_t);                // number of docsSoFar
+  for (const auto& doc : returnDocs) {
+    size += sizeof(uint32_t);              // length prefix
+    size += doc.size();                    // doc string bytes
+  }
+
+  size += sizeof(uint32_t);                // keywordIndex
+  return size;
+}
+
+void PennSearchMessage::SearchReq::Print(std::ostream &os) const {
+  os << "SearchReq:: requester = " << requester << "\n";
+  os << "SearchReq:: keywords = ";
+  for (const auto& keyword : keywords) {
+    os << keyword << " ";
+  }
+  os << "\n";
+  os << "SearchReq:: returnDocs = ";
+  for (const auto& doc : returnDocs) {
+    os << doc << " ";
+  }
+  os << "\n";
+  os << "SearchReq:: keywordIndex = " << keywordIndex << "\n";
+}
+
+void PennSearchMessage::SearchReq::Serialize(Buffer::Iterator &start) const {
+  start.WriteHtonU32(requester.Get());
+
+  // Serialize keywords
+  start.WriteHtonU32(keywords.size());
+  for (const auto& keyword : keywords) {
+    start.WriteHtonU32(keyword.size());
+    start.Write(reinterpret_cast<const uint8_t*>(keyword.data()), keyword.size());
+  }
+
+  // Serialize returnDocs
+  start.WriteHtonU32(returnDocs.size());
+  for (const auto& doc : returnDocs) {
+    start.WriteHtonU32(doc.size());
+    start.Write(reinterpret_cast<const uint8_t*>(doc.data()), doc.size());
+  }
+
+  start.WriteHtonU32(keywordIndex);
+}
+
+uint32_t PennSearchMessage::SearchReq::Deserialize(Buffer::Iterator &start) {
+  requester = Ipv4Address(start.ReadNtohU32());
+
+  // Deserialize keywords
+  uint32_t numKeywords = start.ReadNtohU32();
+  keywords.clear();
+  for (uint32_t i = 0; i < numKeywords; ++i) {
+    uint32_t len = start.ReadNtohU32();
+    std::string kw(len, '\0');
+    start.Read(reinterpret_cast<uint8_t*>(&kw[0]), len);
+    keywords.push_back(kw);
+  }
+
+  // Deserialize docsSoFar
+  uint32_t numDocs = start.ReadNtohU32();
+  returnDocs.clear();
+  for (uint32_t i = 0; i < numDocs; ++i) {
+    uint32_t len = start.ReadNtohU32();
+    std::string doc(len, '\0');
+    start.Read(reinterpret_cast<uint8_t*>(&doc[0]), len);
+    returnDocs.push_back(doc);
+  }
+
+  keywordIndex = start.ReadNtohU32();
+
+  return GetSerializedSize();
+}
+
+void
+PennSearchMessage::SetSearchReq (Ipv4Address requester, std::vector<std::string>& keywords, std::vector<std::string>& returnDocs, uint32_t keywordIndex)
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = SEARCH_REQ;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == SEARCH_REQ);
+    }
+  m_message.searchReq.requester = requester;
+  m_message.searchReq.keywords = keywords;
+  m_message.searchReq.returnDocs = returnDocs;
+  m_message.searchReq.keywordIndex = keywordIndex;
+}
+
+PennSearchMessage::SearchReq
+PennSearchMessage::GetSearchReq ()
+{
+  return m_message.searchReq;
 }

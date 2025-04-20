@@ -71,6 +71,9 @@ class PennSearch : public PennApplication
     void ProcessRejoin(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
     std::map<uint32_t, std::pair<std::string, std::vector<std::string>>> m_pendingRejoin;
 
+    // Publish
+    void ProcessSearchReq(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort);
+
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
     // From PennLog
@@ -106,6 +109,10 @@ class PennSearch : public PennApplication
     std::map<uint32_t, Ptr<PingRequest> > m_pingTracker;
     // Inverted index <keyword, docIDs>
     std::map<std::string, std::vector<std::string>> m_invertedIndex;
+
+    // search tracker
+    std::map<uint32_t, std::pair<Ipv4Address, std::string>> m_pendingSearches; // tid → (original requester, keyword)
+
 };
 
 #endif
