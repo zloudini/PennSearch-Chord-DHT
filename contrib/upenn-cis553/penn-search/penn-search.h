@@ -65,6 +65,9 @@ class PennSearch : public PennApplication
     void PublishMetadataFile(std::string filename);
     std::map<uint32_t, std::pair<std::string, std::vector<std::string>>> m_pendingPublishes;
 
+    // Leave Callback handling 
+    void HandleLeave(Ipv4Address successorIp);
+
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
     // From PennLog

@@ -733,6 +733,12 @@ PennChord::Leave()
   pkt2->AddHeader(msg2);
   m_socket->SendTo(pkt2, 0, InetSocketAddress(m_predecessor, m_appPort));
 
+  // pass leave up to PennChord to pass on documents to successor
+  if(!m_leaveCallback.IsNull()){
+    // CHORD_LOG("SETTING LEAVE CALLBACK");
+    m_leaveCallback(m_successor);
+  }
+
   m_predecessor = Ipv4Address::GetAny();
   m_successor = Ipv4Address::GetAny();
   
@@ -766,7 +772,12 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
   if (sender == m_successor) {
     m_successor = newSuccessor;
   }
+}
 
+void
+PennChord::SetLeaveCallback(Callback<void, Ipv4Address> leaveCB)
+{
+  m_leaveCallback = leaveCB;
 }
 
 /*Finger Table Methods*/

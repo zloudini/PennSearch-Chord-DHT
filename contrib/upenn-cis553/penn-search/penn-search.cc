@@ -124,6 +124,9 @@ PennSearch::StartApplication (void)
   // set lookup success and failure callbacks
   m_chord->SetLookupSuccessCallback(MakeCallback(&PennSearch::HandleChordLookupSuccess, this));
   m_chord->SetLookupFailureCallback(MakeCallback(&PennSearch::HandleChordLookupFailure, this));
+
+  // leave callback
+  m_chord->SetLeaveCallback(MakeCallback(&PennSearch::HandleLeave, this));
 }
 
 void
@@ -582,4 +585,37 @@ void
 PennSearch::ProcessPublishRsp (PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
 {
   // we're handling the clean up in the process publish request for now
+}
+
+/* LEAVE LOGIC */
+void
+PennSearch::HandleLeave(Ipv4Address successorIp)
+{
+  // SEARCH_LOG("ENTERED HANDLE LEAVE IN PENNSEARCH");
+
+  // SEARCH_LOG("LEAVE: Inverted index size = " << m_invertedIndex.size());
+
+  // SEARCH_LOG("LEAVE: Successor IP is " << successorIp);
+
+  
+  for (const auto& entry : m_invertedIndex)
+  {
+    const std::string& keyword = entry.first;
+    const std::vector<std::string>& docs = entry.second;
+
+    for (const auto& doc : docs)
+    {
+      PennSearchMessage msg = PennSearchMessage(PennSearchMessage::PUBLISH_REQ, GetNextTransactionId());
+      msg.SetPublishReq(keyword, doc);
+      Ptr<Packet> pkt = Create<Packet>();
+      pkt->AddHeader(msg);
+      m_socket->SendTo(pkt, 0, InetSocketAddress(successorIp, m_appPort));
+
+      // SEARCH_LOG("LEAVE: Sent tag (" << keyword << ", " << doc << ") to successor " << m_chord->ReverseLookup(successorIp));
+      
+    }
+  }
+
+  m_invertedIndex.clear();
+
 }

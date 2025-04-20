@@ -61,6 +61,9 @@ class PennChord : public PennApplication
     void SetLookupSuccessCallback(Callback <void, uint32_t, Ipv4Address> lookupSuccessFn);
     void SetLookupFailureCallback(Callback <void, uint32_t> lookupFailureFn);
 
+    // Leave Callback
+    void SetLeaveCallback(Callback<void, Ipv4Address> leaveCb);
+
     // From PennApplication
     virtual void ProcessCommand (std::vector<std::string> tokens);
     
@@ -117,6 +120,9 @@ class PennChord : public PennApplication
     Ipv4Address m_predecessor;
     Ipv4Address m_successor;
     uint32_t m_nodeHash;
+
+    // leave callbacks
+    Callback<void, Ipv4Address> m_leaveCallback;
 
     // Lookup callbacks
     Callback <void, uint32_t, Ipv4Address> m_lookupSuccessFn;
