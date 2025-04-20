@@ -118,7 +118,7 @@ class PennSearchMessage : public Header
         uint32_t Deserialize (Buffer::Iterator &start);
         // Payload
         std::string keyword;
-        std::string docID;
+        std::vector<std::string> docID;
       };
 
     /**
@@ -217,7 +217,7 @@ class PennSearchMessage : public Header
      *  \brief Sets PublishReq message params
      *  \param message Payload String
      */
-    void SetPublishReq (std::string keyword, std::string docID);
+    void SetPublishReq (std::string keyword, const std::vector<std::string>& docID);
 
     /**
      *  \returns PublishRsp Struct

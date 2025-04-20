@@ -68,6 +68,9 @@ TIME 5000
 5 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata5.keys
 TIME 5000
 
+3 PENNSEARCH CHORD RINGSTATE
+TIME 10000
+
 #STEP 4 ----------- Search correctness with multiple keywords ---------------#
 8 PENNSEARCH SEARCH 17 George-Clooney Brad-Pitt Matt-Damon 
 TIME 5000

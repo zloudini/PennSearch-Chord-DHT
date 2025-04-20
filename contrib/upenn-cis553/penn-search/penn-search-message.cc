@@ -344,7 +344,7 @@ PennSearchMessage::GetTransactionId (void) const
 void
 PennSearchMessage::PublishReq::Print (std::ostream &os) const
 {
-  os << "PublishReq:: Keyword: " << keyword << " DocID: " << docID << "\n";
+  os << "PublishReq:: Keyword: " << keyword << " DocID: " << "\n";
 }
 
 /**
@@ -354,11 +354,13 @@ PennSearchMessage::PublishReq::Print (std::ostream &os) const
 uint32_t
 PennSearchMessage::PublishReq::GetSerializedSize (void) const
 {
-  uint32_t size;
-  size = sizeof(uint16_t)  // length of keyword
-    + keyword.size()  // keyword
-    + sizeof(uint16_t)  // length of docID
-    + docID.size();  // docID
+  uint32_t size = sizeof(uint16_t) + keyword.size(); // keyword
+  size += sizeof(uint32_t); // number of docIDs
+
+  for (const auto& doc : docID) {
+    size += sizeof(uint32_t); // length of doc
+    size += doc.size();       // doc string
+  }
   return size;
 }
 
@@ -369,10 +371,14 @@ PennSearchMessage::PublishReq::GetSerializedSize (void) const
 void
 PennSearchMessage::PublishReq::Serialize (Buffer::Iterator &start) const
 {
-  start.WriteU16(keyword.size()); // length of keyword
-  start.Write((uint8_t*) keyword.data(), keyword.size()); // keyword
-  start.WriteU16(docID.size()); // length of docID
-  start.Write((uint8_t*) docID.data(), docID.size()); // docID
+  start.WriteU16(keyword.size());
+  start.Write((uint8_t *) keyword.data(), keyword.size());
+
+  start.WriteHtonU32(docID.size());
+  for (const auto& doc : docID) {
+    start.WriteHtonU32(doc.size());
+    start.Write((uint8_t *) doc.data(), doc.size());
+  }
 }
 
 /**
@@ -383,12 +389,20 @@ PennSearchMessage::PublishReq::Serialize (Buffer::Iterator &start) const
 uint32_t
 PennSearchMessage::PublishReq::Deserialize (Buffer::Iterator &start)
 {
-  uint16_t klen = start.ReadU16(); // length of keyword 
-  keyword.resize(klen); // resize keyword
-  start.Read ((uint8_t*)keyword.data(), klen); // keyword
-  uint16_t dlen = start.ReadU16(); // length of docID
-  docID.resize(dlen); // resize docID
-  start.Read ((uint8_t*)docID.data(), dlen); // docID
+  uint16_t klen = start.ReadU16();
+  keyword.resize(klen);
+  start.Read((uint8_t *) keyword.data(), klen);
+
+  uint32_t numDocs = start.ReadNtohU32();
+  docID.clear();
+  for (uint32_t i = 0; i < numDocs; ++i) {
+    uint32_t len = start.ReadNtohU32();
+    std::string doc;
+    doc.resize(len);
+    start.Read((uint8_t *) doc.data(), len);
+    docID.push_back(doc);
+  }
+
   return GetSerializedSize();
 }
 
@@ -398,7 +412,7 @@ PennSearchMessage::PublishReq::Deserialize (Buffer::Iterator &start)
  * \param docID The docID
  */
 void
-PennSearchMessage::SetPublishReq (std::string keyword, std::string docID)
+PennSearchMessage::SetPublishReq (std::string keyword, const std::vector<std::string>& docID)
 {
   if (m_messageType == 0)
     {
