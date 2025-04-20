@@ -554,24 +554,41 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 
 
   auto it = m_invertedIndex.find(currentKeyword);
-  // search locally first to see if we have the keyword
+
+  // this means we have the keyword in the inverted index of the current node
   if (it != m_invertedIndex.end()) {
-    // SEARCH_LOG("FOUND KEYWORD " << currentKeyword);
-    // found the keyword in the inverted index
-    // insert them into the results vector that will be sent back
+    // this is the set of docIDs that will be returned
     std::set<std::string> docSet(docIDs.begin(), docIDs.end());
-    docSet.insert(it->second.begin(), it->second.end());
+
+    // if it's the first keyword, then just insert the docs from the inverted index
+    if (keywordIndex == 0) {
+      docSet.insert(it->second.begin(), it->second.end());
+    } 
+    // for subsequent keywords, intersect the current docSet with the new keyword's documents
+    else {
+        std::set<std::string> currentDocs(it->second.begin(), it->second.end());
+        std::set<std::string> intersection;
+
+        // this is to make sure we only return the docs that are in both the current keyword and the new keyword
+        // rather than the union of the two sets
+        std::set_intersection(docSet.begin(), docSet.end(),
+                              currentDocs.begin(), currentDocs.end(),
+                              std::inserter(intersection, intersection.begin()));
+        docSet = intersection;
+    }
+
+    // assign the docIDs to the docIDs vector
     docIDs.assign(docSet.begin(), docSet.end());
 
 
     SEARCH_LOG(GraderLogs::GetInvertedListShipLogStr(currentKeyword, docIDs));
 
-    // found last keyword, now look at next one
+    // iterate to the next keyword
     keywordIndex++;
 
-    // if there are no more then send a search response back to who requested it.
+    // if there are no more keywords to search, then send a search response back to who requested it
+    // this means we have the final set of docIDs to return
     if(keywordIndex >= keywords.size()) {
-
       // all keywords have been searched, send back the results
       PennSearchMessage resp = PennSearchMessage(PennSearchMessage::SEARCH_RSP, tid);
       resp.SetSearchRsp(requester, docIDs);
@@ -582,10 +599,9 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
       // log search results for grader
       // SEARCH_LOG(GraderLogs::GetSearchResultsLogStr(requester, docIDs));
       return;
-
-      // reach here if there are still more keywords to find
-    } else {
-      
+  }
+    // otherwise, send a search request to the next keyword in the list 
+    else {
       std::string nextKeyword = keywords[keywordIndex];
       uint32_t key = PennKeyHelper::CreateShaKey(nextKeyword);
       uint32_t newTid = GetNextTransactionId();
@@ -596,7 +612,7 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
       //SEARCH_LOG("Sent with transactionId: " << newTid << " looking for key: " << PennKeyHelper::KeyToHexString(key));
     }
   }
-  // if we don't own the keyword
+  // if we don't own the keyword, then we need to send a search request to the next node
   else
   {
     std::string nextKeyword = keywords[keywordIndex];
