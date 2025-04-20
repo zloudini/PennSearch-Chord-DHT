@@ -559,7 +559,10 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
     // SEARCH_LOG("FOUND KEYWORD " << currentKeyword);
     // found the keyword in the inverted index
     // insert them into the results vector that will be sent back
-    docIDs.insert(docIDs.end(), it->second.begin(), it->second.end());
+    std::set<std::string> docSet(docIDs.begin(), docIDs.end());
+    docSet.insert(it->second.begin(), it->second.end());
+    docIDs.assign(docSet.begin(), docSet.end());
+
 
     SEARCH_LOG(GraderLogs::GetInvertedListShipLogStr(currentKeyword, docIDs));
 
@@ -585,10 +588,12 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
       
       std::string nextKeyword = keywords[keywordIndex];
       uint32_t key = PennKeyHelper::CreateShaKey(nextKeyword);
+      uint32_t newTid = GetNextTransactionId();
 
-      m_pendingSearches[tid] = std::make_tuple(keywords, docIDs, requester, keywordIndex);
-      m_chord->ChordLookup(tid, key);
-      // SEARCH_LOG("Sent with transactionId: " << tid << " looking for key: " << PennKeyHelper::KeyToHexString(key));
+
+      m_pendingSearches[newTid] = std::make_tuple(keywords, docIDs, requester, keywordIndex);
+      m_chord->ChordLookup(newTid, key);
+      SEARCH_LOG("Sent with transactionId: " << newTid << " looking for key: " << PennKeyHelper::KeyToHexString(key));
     }
   }
   // if we don't own the keyword
@@ -599,7 +604,7 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 
     m_pendingSearches[tid] = std::make_tuple(keywords, docIDs, requester, keywordIndex);
     m_chord->ChordLookup(tid, key);
-    //SEARCH_LOG("Sent with transactionId: " << tid << " looking for key: " << nextKeyword << " with key: " << PennKeyHelper::KeyToHexString(key));
+    SEARCH_LOG("Sent with transactionId: " << tid << " looking for key: " << nextKeyword << " with key: " << PennKeyHelper::KeyToHexString(key));
   }
 
 }
@@ -700,7 +705,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 
     m_pendingSearches.erase(tid);
 
-    // CHORD_LOG("FORWARDING SEARCH_REQ TO " << ReverseLookup(owner) << " for KEYWORD: " << keywords[keywordIndex] << " with transactionId: " << tid);
+    CHORD_LOG("FORWARDING SEARCH_REQ TO " << ReverseLookup(owner) << " for KEYWORD: " << keywords[keywordIndex] << " with transactionId: " << tid);
   }
 
   // SEARCH_LOG("unknown type of request");

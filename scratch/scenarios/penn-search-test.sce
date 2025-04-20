@@ -59,12 +59,6 @@ TIME 10000
 
 #STEP 3 ------------ Publish ---------------#
 TIME 20000
-2 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata2.keys
-TIME 5000
-3 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata3.keys
-TIME 5000
-4 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata4.keys
-TIME 5000
 5 PENNSEARCH PUBLISH ./contrib/upenn-cis553/keys/metadata5.keys
 TIME 5000
 
@@ -72,8 +66,8 @@ TIME 5000
 TIME 10000
 
 #STEP 4 ----------- Search correctness with multiple keywords ---------------#
-8 PENNSEARCH SEARCH 17 George-Clooney Brad-Pitt Matt-Damon 
-TIME 5000
+15 PENNSEARCH SEARCH 12 Chadwick-Boseman
+TIME 10000
 
 QUIT
 

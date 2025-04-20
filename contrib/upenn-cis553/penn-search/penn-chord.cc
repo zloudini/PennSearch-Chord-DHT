@@ -458,7 +458,7 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
     {
       if (!m_lookupSuccessFn.IsNull())
       {
-        //CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
+        // CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
         m_lookupSuccessFn(tx, successorIp);
       }
 

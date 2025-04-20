@@ -89,7 +89,7 @@ TIME 5000
 
 15 PENNSEARCH SEARCH 15 Tom-Hardy
 15 PENNSEARCH SEARCH 3 Emilia-Clarke
-15 PENNSEARCH SEARCH 12 Chadwick-Boseemann
+15 PENNSEARCH SEARCH 12 Chadwick-Boseman
 TIME 5000
 
 #STEP 7 ------------- non-chord node search ---------------#
