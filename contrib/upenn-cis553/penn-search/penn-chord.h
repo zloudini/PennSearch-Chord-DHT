@@ -163,6 +163,8 @@ class PennChord : public PennApplication
 
     // transaction ID for a packet sent during a rejoin
     uint32_t m_joinTransactionId;
+
+    std::map<uint32_t, uint32_t> m_pendingLookups;
 };
 
 #endif

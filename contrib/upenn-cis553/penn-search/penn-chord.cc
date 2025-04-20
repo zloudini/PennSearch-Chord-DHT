@@ -453,17 +453,26 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   {
     // CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
 
-    m_successor = successorIp;
-
-    if (!m_lookupSuccessFn.IsNull())
+    auto lookupIt = m_pendingLookups.find(tx);
+    if (lookupIt != m_pendingLookups.end())
     {
-      // CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
-      m_lookupSuccessFn(tx, successorIp);
-    }
+      if (!m_lookupSuccessFn.IsNull())
+      {
+        //CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
+        m_lookupSuccessFn(tx, successorIp);
+      }
 
-    if (tx == m_joinTransactionId && !m_rejoinCallback.IsNull())
-    {
-      Simulator::Schedule(MilliSeconds(1500), &PennChord::TriggerRejoinCallback, this);
+      // m_pendingLookups.erase(lookupIt);
+    } else {
+      
+      // CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(successorIp));
+      
+      m_successor = successorIp;
+
+      if (tx == m_joinTransactionId && !m_rejoinCallback.IsNull())
+      {
+        Simulator::Schedule(MilliSeconds(1500), &PennChord::TriggerRejoinCallback, this);
+      }
     }
   }
 
@@ -494,7 +503,7 @@ PennChord::Stabilize()
   // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
 
   // change to MilliSeconds?
-  m_stabilizeTimer.Schedule(MilliSeconds(500));
+  m_stabilizeTimer.Schedule(MilliSeconds(750));
 }
 
 bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end) const
@@ -555,6 +564,7 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
       //CHORD_LOG("Stabilize: Sent StabilizeRsp to " << ReverseLookup(senderIp) << " updating successor to: " << ReverseLookup(updated_successor));
 
     } else {
+      // CHORD_LOG("Stabilize: Updating successor from " << ReverseLookup(m_successor) << " to " << ReverseLookup(senderIp));
       m_successor = m_predecessor;
     }
   }
@@ -897,6 +907,9 @@ PennChord::ClosestPrecedingFinger(uint32_t idToFind) const
 void
 PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
 {
+
+  m_pendingLookups[transactionId] = idToFind;
+
   PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
 
   msg.SetFindSuccessorReq(idToFind, GetLocalAddress());
