@@ -87,7 +87,7 @@ PennChord::StartApplication (void)
   
   m_nodeHash = PennKeyHelper::CreateShaKey(GetLocalAddress());
   m_predecessor = Ipv4Address::GetAny();
-  m_successor = GetLocalAddress(); // self is its own successor
+  // m_successor = GetLocalAddress(); // self is its own successor
 
   // Configure timers
   m_auditPingsTimer.SetFunction (&PennChord::AuditPings, this);
@@ -313,15 +313,18 @@ PennChord::Join(Ipv4Address landmark)
 {
   Ipv4Address selfIp = GetLocalAddress();
   uint32_t myId = PennKeyHelper::CreateShaKey(selfIp);
+  m_successor = GetLocalAddress();
+  m_predecessor = Ipv4Address::GetAny();
   
 
   // packet overhead
   uint32_t transactionId = GetNextTransactionId();
 
-  // for rejoings
-  if(m_successor == Ipv4Address::GetAny())
+  // for rejoins
+  if(m_leftChord)
   {
     m_joinTransactionId = transactionId;
+    m_leftChord = false;
   }
 
   PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
@@ -456,7 +459,7 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
     if (tx == m_joinTransactionId && !m_rejoinCallback.IsNull())
     {
-      Simulator::Schedule(MilliSeconds(1000), &PennChord::TriggerRejoinCallback, this);
+      Simulator::Schedule(MilliSeconds(1500), &PennChord::TriggerRejoinCallback, this);
     }
   }
 
@@ -751,6 +754,8 @@ PennChord::Leave()
 
   m_predecessor = Ipv4Address::GetAny();
   m_successor = Ipv4Address::GetAny();
+
+  m_leftChord = true;
   
   // StopApplication();
 }
@@ -819,7 +824,7 @@ PennChord::FixFingerTable()
   if (!m_fingerTableInitialized)
     {
       InitFingerTable();
-      m_fixFingerTimer.Schedule(Seconds(1));
+      m_fixFingerTimer.Schedule(MilliSeconds(100));
       return;
     }
   // get index of next finger to be fixed
@@ -895,15 +900,21 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
 
-  // if (m_successor == Ipv4Address::GetAny())
-  // {
-  //   CHORD_LOG("Error: m_successor is empty");
-  //   return;
-  // }
+  Ipv4Address nextHop;
+  
+  // Use finger table to find next hop toward idToFind
+  int fingerIndex = ClosestPrecedingFinger(idToFind);
+  if (fingerIndex >= 0)
+  {
+    nextHop = m_fingerTable[fingerIndex].finger_ip;
+  }
+  else
+  {
+    // fallback to successor if no better finger found
+    nextHop = m_successor;
+  }
 
-  // CHORD_LOG("TRANSACTION ID LOOKUP " << transactionId);
-
-  m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
+  m_socket->SendTo(pkt, 0, InetSocketAddress(nextHop, m_appPort));
 
   CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, idToFind));
 }
@@ -976,7 +987,7 @@ void
 PennChord::TriggerRejoinCallback()
 {
   if (!m_rejoinCallback.IsNull()) {
-    //CHORD_LOG("Triggering REJOIN callback with successor: " << ReverseLookup(m_successor));
+    CHORD_LOG("Triggering REJOIN callback with successor: " << ReverseLookup(m_successor));
     m_rejoinCallback(m_successor);
   }
 }

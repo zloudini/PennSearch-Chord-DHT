@@ -126,6 +126,7 @@ class PennChord : public PennApplication
     Callback<void, Ipv4Address> m_leaveCallback;
     Callback<void, Ipv4Address> m_rejoinCallback;
     void TriggerRejoinCallback();
+    bool m_leftChord = false;
 
     // Lookup callbacks
     Callback <void, uint32_t, Ipv4Address> m_lookupSuccessFn;
