@@ -344,6 +344,12 @@ PennChord::Join(Ipv4Address landmark)
 void
 PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 {
+  // debug to see when true lookups is triggered in ProcessFindSuccessorReq
+  if (message.isLookup())
+  {
+    CHORD_LOG("Received FIND_SUCCESSOR_REQ for id" << message.GetFindSuccessorReq().idToFind);
+  }
+
   PennChordMessage::FindSuccessorReq req = message.GetFindSuccessorReq();
   uint32_t idToFind = req.idToFind;
   Ipv4Address requestorIp = req.requestorIp;
@@ -423,6 +429,12 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 void
 PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 {
+  // debug to see when true lookups is triggered in ProcessFindSuccessorRsp
+  if (message.isLookup())
+  {
+    CHORD_LOG("Received FIND_SUCCESSOR_RSP for id" << message.GetFindSuccessorRsp().successorIp);
+  }
+
   PennChordMessage::FindSuccessorRsp rsp = message.GetFindSuccessorRsp();
   Ipv4Address successorIp = rsp.successorIp;
 
@@ -911,6 +923,9 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
   m_pendingLookups[transactionId] = idToFind;
 
   PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
+
+  // ChordLookup is a lookup, so set the flag to true
+  msg.isLookup(true);
 
   msg.SetFindSuccessorReq(idToFind, GetLocalAddress());
 
