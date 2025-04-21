@@ -161,7 +161,7 @@ PennChordMessage::Serialize (Buffer::Iterator start) const
   Buffer::Iterator i = start;
   i.WriteU8 (m_messageType);
   i.WriteHtonU32 (m_transactionId);
-  i.WriteHtonU8 (m_isLookup ? 1 : 0); // serialize 1 for true, 0 for false
+  i.WriteU8 (m_isLookup ? 1 : 0); // serialize 1 for true, 0 for false
 
   switch (m_messageType)
     {
@@ -207,7 +207,7 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
   Buffer::Iterator i = start;
   m_messageType = (MessageType) i.ReadU8 ();
   m_transactionId = i.ReadNtohU32 ();
-  m_isLookup = i.ReadNtohU8() == 1; // deserialize 1 for true, 0 for false
+  m_isLookup = i.ReadU8() == 1; // deserialize 1 for true, 0 for false
 
   size = sizeof (uint8_t) + sizeof (uint32_t);
 

@@ -345,7 +345,7 @@ void
 PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 {
   // debug to see when true lookups is triggered in ProcessFindSuccessorReq
-  if (message.isLookup())
+  if (message.GetIsLookup())
   {
     CHORD_LOG("Received FIND_SUCCESSOR_REQ for id" << message.GetFindSuccessorReq().idToFind);
   }
@@ -430,7 +430,7 @@ void
 PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 {
   // debug to see when true lookups is triggered in ProcessFindSuccessorRsp
-  if (message.isLookup())
+  if (message.GetIsLookup())
   {
     CHORD_LOG("Received FIND_SUCCESSOR_RSP for id" << message.GetFindSuccessorRsp().successorIp);
   }
@@ -925,7 +925,7 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
   PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
 
   // ChordLookup is a lookup, so set the flag to true
-  msg.isLookup(true);
+  msg.SetIsLookup(true);
 
   msg.SetFindSuccessorReq(idToFind, GetLocalAddress());
 
