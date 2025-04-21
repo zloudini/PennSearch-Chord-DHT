@@ -555,7 +555,6 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 
   auto it = m_invertedIndex.find(currentKeyword);
 
-
   // this means we have the keyword in the inverted index of the current node
   if (it != m_invertedIndex.end()) {
     // this is the set of docIDs that will be returned
@@ -629,9 +628,12 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 void
 PennSearch::ProcessSearchRsp(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
 {
+  // unpack search response
   auto rsp = message.GetSearchRsp();
   auto results = rsp.results;
   auto requester = rsp.requester;
+
+  // log search results for grader
   SEARCH_LOG(GraderLogs::GetSearchResultsLogStr(requester, results));
 }
 
@@ -709,12 +711,11 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
     Ipv4Address requester = std::get<2>(tuple);
     uint32_t keywordIndex = std::get<3>(tuple);
 
-    // detect a “missing” inverted-list:
+    // detect a “missing” inverted-list: a keyword that is not in the inverted index
+    // if the owner is the local node and the keyword is not in the inverted index, then send back an empty vector
     const std::string &kw = keywords[keywordIndex];
-    if (owner == GetLocalAddress() &&
-        m_invertedIndex.find(kw) == m_invertedIndex.end())
+    if (owner == GetLocalAddress() && m_invertedIndex.find(kw) == m_invertedIndex.end())
     {
-      // owner==me && no data → send back {} to the ORIGINAL requester
       PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
       std::vector<std::string> empty;
       resp.SetSearchRsp(requester, empty);  
@@ -725,7 +726,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
       return;
     }
 
-    // Otherwise forward the SEARCH_REQ to “owner” as you already do:
+    // Otherwise forward the SEARCH_REQ to “owner” to get the inverted list
     PennSearchMessage fwd(PennSearchMessage::SEARCH_REQ, tid);
     fwd.SetSearchReq(requester, keywords, docIds, keywordIndex);
     Ptr<Packet> pkt = Create<Packet>();
@@ -744,13 +745,16 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 void
 PennSearch::HandleChordLookupFailure(uint32_t tid)
 {
+  // lookup failure for unknown transaction id
   auto it = m_pendingSearches.find(tid);
   if (it == m_pendingSearches.end())
   {
-    return;  // not a search we care about
+    return;  // not a search we care about because it's not in the pending searches
   }
-  // pull requester out of the tuple:
+  // pull requester out of the tuple
+  // so we can send back an empty vector to the original requester to indicate that the keyword is not in the inverted index
   else {
+    // unpack the tuple
     std::vector<std::string> keywords = std::get<0>(it->second);
     std::vector<std::string> docIds = std::get<1>(it->second);
     Ipv4Address requester = std::get<2>(it->second);
