@@ -300,21 +300,27 @@ PennChord::AuditPings ()
   m_auditPingsTimer.Schedule (m_pingTimeout); 
 }
 
+/** CHORD LOGIC **/
+
+/**
+ * Create a new Chord ring
+ */
 void
 PennChord::ChordCreate()
 {
   Ipv4Address selfIp = GetLocalAddress();
   m_predecessor = Ipv4Address::GetAny();
   m_successor = selfIp;
-  // might be unneccessary
   m_nodeHash = PennKeyHelper::CreateShaKey(selfIp);
   
   // initialize finger table on ChordCreate
   InitFingerTable();
-
-  // CHORD_LOG("CREATE: Created Chord ring at node " << ReverseLookup(selfIp) << " With Successor: " << ReverseLookup(m_successor) << " | Hash: " << m_nodeHash);
 }
 
+/**
+ * Join a Chord ring
+ * \param landmark The landmark node to join
+ */
 void
 PennChord::Join(Ipv4Address landmark)
 {
@@ -323,7 +329,6 @@ PennChord::Join(Ipv4Address landmark)
   m_successor = GetLocalAddress();
   m_predecessor = Ipv4Address::GetAny();
   
-
   // packet overhead
   uint32_t transactionId = GetNextTransactionId();
 
@@ -341,13 +346,12 @@ PennChord::Join(Ipv4Address landmark)
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
   m_socket->SendTo(pkt, 0, InetSocketAddress(landmark, m_appPort));
-
-  // TO-DO Might need to change parameters of call
-  // CHORD_LOG(GraderLogs::GetLookupIssueLogStr(myId, myId));
-
-  //CHORD_LOG("JOIN: Sent FIND_SUCCESSOR_REQ to " << ReverseLookup(landmark) << " (IP: " << landmark << ") for id " << myId);
 }
 
+/**
+ * Process find successor request
+ * \param message The find successor request message
+ */
 void
 PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 {
@@ -368,13 +372,12 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
   bool replyTriggered = false;
 
-  //REMOVE LAST OR STATEMENT WHEN FINGER TABLE COMPLETE
+  // replyTriggered is true if the requestor is in between the self and the successor
   if (IsInBetween(selfId, idToFind, successorId) || selfId == successorId){
     replyTriggered = true;
   }
 
-  // CHORD_LOG("FIND_SUCCESSOR_REQ: selfId: " << selfId << " idToFind: " << idToFind << " successorId: " << successorId);
-
+  // if the requestor is in between the self and the successor, then respond to the requestor
   if (replyTriggered) {
     //respond to requestor
     uint32_t transactionId = message.GetTransactionId();
@@ -383,32 +386,14 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     // set isLookup to be that of the requestor
     resp.SetIsLookup(message.GetIsLookup());
     resp.SetFindSuccessorRsp(m_successor);
-
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(resp);
-
-    // if (requestorIp == Ipv4Address::GetAny())
-    // {
-    //   CHORD_LOG("Error: requestorIp is empty");
-    //   return;
-    // }
-
     m_socket->SendTo(packet, 0, InetSocketAddress(requestorIp, m_appPort));
   } 
+  // if the requestor is not in between the self and the successor, then forward to the successor
   else
   {
-    // Ipv4Address nextHopIp = m_successor;
-    // CHORD_LOG("NODE GOING TO: " << ReverseLookup(nextHopIp));
-    
-    // fallback to successor if nothing matched
-    // if (nextHopIp == Ipv4Address::GetAny())
-    // {
-    //   nextHopIp = m_successor;
-    //   // nextHopPort = m_appPort;
-    // }
-    
     // forward to successor
-
     if (message.GetIsLookup())
     {
       uint32_t tx = message.GetTransactionId();
@@ -419,31 +404,17 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 
     int fingerTableIndex = ClosestPrecedingFinger(idToFind);
     Ipv4Address nextHopIp = (fingerTableIndex != -1) ? m_fingerTable[fingerTableIndex].finger_ip : m_successor;
-
-    //CHORD_LOG("FIND_SUCCESSOR_REQ FORWARDING: selfId: " << ReverseLookup(GetLocalAddress()) << " idToFind: " << idToFind << " nextHopIp: " << ReverseLookup(nextHopIp));
-
     Ptr<Packet> packet = Create<Packet>();
     packet->AddHeader(message);
-
-    // if (nextHopIp == Ipv4Address::GetAny())
-    // {
-    //   CHORD_LOG("Error: nextHopIp is empty");
-    //   return;
-    // }
-
-    // m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, nextHopPort));
     m_socket->SendTo(packet, 0, InetSocketAddress(nextHopIp, m_appPort));
-
-    // CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(m_successor),  PennKeyHelper::CreateShaKey(m_successor), idToFind));
-    // auto hopHash = PennKeyHelper::CreateShaKey(nextHopIp);
-    
-    // CHORD_LOG(GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(nextHopIp), hopHash, idToFind));
-
-    //CHORD_LOG("FIND_SUCCESSOR_REQ for node " << ReverseLookup(requestorIp) << "... forwarding to " << ReverseLookup(m_successor));
   }
 
 }
 
+/**
+ * Process find successor response
+ * \param message The find successor response message
+ */
 void
 PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 {
@@ -475,22 +446,14 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
   {
     // get index of finger table entry in pendingFingers
     uint32_t idx = txId->second;
-    // ensure index is within bounds
-    // if (idx >= m_fingerTableSize)
-    // {
-    //   CHORD_LOG("Error: Index out of bounds");
-    //   return;
-    // }
     // update finger table then erase transactionId from pendingFingers
     m_fingerTable[idx].finger_ip = successorIp;
-    // m_fingerTable[idx].finger_port = m_appPort;
     m_fingerTable[idx].finger_id = PennKeyHelper::CreateShaKey(successorIp);
     m_pendingFingers.erase(txId);
   }
   else
   {
-    // CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(m_successor));
-
+    // check if transaction id is in pendingLookups
     auto lookupIt = m_pendingLookups.find(tx);
     if (lookupIt != m_pendingLookups.end())
     {
@@ -499,14 +462,9 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
         // CHORD_LOG("SETTING CALLBACK for Transaction: " << message.GetTransactionId() << " TO NODE: " << ReverseLookup(successorIp) << " FOR NODE: " << ReverseLookup(GetLocalAddress()));
         m_lookupSuccessFn(tx, successorIp);
       }
-
-      // m_pendingLookups.erase(lookupIt);
     } else {
-      
-      // CHORD_LOG("FIND_SUCCESSOR_RSP: Set successor for node: " << ReverseLookup(GetLocalAddress()) << " to node: " << ReverseLookup(successorIp));
-      
+      // set successor
       m_successor = successorIp;
-
       if (tx == m_joinTransactionId && !m_rejoinCallback.IsNull())
       {
         Simulator::Schedule(MilliSeconds(1500), &PennChord::TriggerRejoinCallback, this);
@@ -516,6 +474,9 @@ PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 
 }
 
+/**
+ * Stabilize the Chord ring
+ */
 void
 PennChord::Stabilize()
 {
@@ -530,20 +491,19 @@ PennChord::Stabilize()
   // send packet
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
-
-  // if (receiver == Ipv4Address::GetAny())
-  // {
-  //   CHORD_LOG("Error: receiver is empty");
-  //   return;
-  // }
   m_socket->SendTo(pkt, 0, InetSocketAddress(receiver, m_appPort));
 
-  // CHORD_LOG("Stabilize: Sent StabilizeReq to " << ReverseLookup(receiver) << " for node " << ReverseLookup(sender));
-
-  // change to MilliSeconds?
+  // schedule next stabilize
   m_stabilizeTimer.Schedule(MilliSeconds(750));
 }
 
+/**
+ * Check if a target is between two other nodes
+ * \param start The start node
+ * \param target The target node
+ * \param end The end node
+ * \return True if the target is between the start and end nodes, false otherwise
+ */
 bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end) const
 {
   if (start < end) {
@@ -557,6 +517,10 @@ bool PennChord::IsInBetween(uint32_t start, uint32_t target, uint32_t end) const
   }
 }
 
+/**
+ * Process stabilize request
+ * \param message The stabilize request message
+ */
 void
 PennChord::ProcessStabilizeReq(PennChordMessage message)
 {
@@ -566,8 +530,6 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
 
   uint32_t n = PennKeyHelper::CreateShaKey(senderIp);
   uint32_t successor = m_nodeHash;
-
-
   uint32_t x = PennKeyHelper::CreateShaKey(m_predecessor);
 
   // if (x in (n, successor))
@@ -591,63 +553,42 @@ PennChord::ProcessStabilizeReq(PennChordMessage message)
       // send packet back to node that sent the request
       Ptr<Packet> pkt = Create<Packet>();
       pkt->AddHeader(msg);
-
-      // if (senderIp == Ipv4Address::GetAny())
-      // {
-      //   CHORD_LOG("Error: senderIp is empty");
-      //   return;
-      // }
       m_socket->SendTo(pkt, 0, InetSocketAddress(senderIp, m_appPort));
-
-      //CHORD_LOG("Stabilize: Sent StabilizeRsp to " << ReverseLookup(senderIp) << " updating successor to: " << ReverseLookup(updated_successor));
-
     } else {
-      // CHORD_LOG("Stabilize: Updating successor from " << ReverseLookup(m_successor) << " to " << ReverseLookup(senderIp));
+      // update successor
       m_successor = m_predecessor;
     }
   }
-
-  //successor.notify(sender)
   // create notifyPkt
   Ipv4Address newPredecessor = senderIp;
-
-  //packet overhead
   uint32_t transactionId = GetNextTransactionId();
   PennChordMessage msg = PennChordMessage(PennChordMessage::NOTIFY_PKT, transactionId);
   msg.SetNotifyPkt(newPredecessor);
-
-  // send packet to node that needs to be notified
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
-
-  // if (nodeToNotify == Ipv4Address::GetAny())
-  // {
-  //   CHORD_LOG("Error: nodeToNotify is empty");
-  //   return;
-  // }
   m_socket->SendTo(pkt, 0, InetSocketAddress(nodeToNotify, m_appPort));
-
-  // CHORD_LOG("Notify: Sent NotifyPacket to " << ReverseLookup(nodeToNotify) << " for node " << ReverseLookup(newPredecessor))
 }
 
+/**
+ * Process stabilize response
+ * \param message The stabilize response message
+ */
 void
 PennChord::ProcessStabilizeRsp(PennChordMessage message)
 {
   PennChordMessage::StabilizeRsp msg = message.GetStabilizeRsp();
-
   Ipv4Address newSuccessor = msg.sender;
 
-  // CHORD_LOG("StabilizeRsp: " << ReverseLookup(GetLocalAddress()) << " got STABILIZE_RSP to update successor to: " << newSuccessor);
-
+  // update successor if it is not the same as the new successor
   if (newSuccessor != Ipv4Address::GetAny() && (m_successor != newSuccessor || m_successor == Ipv4Address::GetAny())){
-
-    // CHORD_LOG("StabilizeRsp: Updating successor from " << ReverseLookup(m_successor) << " to " << ReverseLookup(newSuccessor));
-    
     m_successor = newSuccessor;
   }
 }
 
-
+/**
+ * Process notify packet
+ * \param message The notify packet message
+ */
 void
 PennChord::ProcessNotifcationPkt(PennChordMessage message)
 {
@@ -655,44 +596,40 @@ PennChord::ProcessNotifcationPkt(PennChordMessage message)
   Ipv4Address updatePredecessor = notification.newPredecessor;
   uint32_t nPrime = PennKeyHelper::CreateShaKey(updatePredecessor);
 
-  // CHORD_LOG("Notify Packet recieved from " << ReverseLookup(updatePredecessor));
-  // CHORD_LOG("Current Pred = " << ReverseLookup(m_predecessor));
-
+  // update predecessor if it is not the same as the new predecessor
   if (m_predecessor == Ipv4Address::GetAny())
   {
     m_predecessor = updatePredecessor;
-    // CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
   }
+  // if the predecessor is not the same as the new predecessor, then update the predecessor
   else
   {
     uint32_t currentPredHash = PennKeyHelper::CreateShaKey(m_predecessor);
-
-    // CHORD_LOG("Self = " << ReverseLookup(GetLocalAddress())
-    //        << " | Current Pred = " << ReverseLookup(m_predecessor)
-    //        << " | Update Pred = " << ReverseLookup(updatePredecessor));
-
-    // CHORD_LOG("Self = " << ReverseLookup(GetLocalAddress())
-    //        << " | Current Successor = " << ReverseLookup(m_successor));
-
     if (IsInBetween(currentPredHash, nPrime, m_nodeHash) && currentPredHash != PennKeyHelper::CreateShaKey(updatePredecessor))
     {
       m_predecessor = updatePredecessor;
-      // CHORD_LOG("Updated Predecessor for Node: " << ReverseLookup(GetLocalAddress()) << " set to: " << ReverseLookup(m_predecessor));
     }
   }
 }
 
+/**
+ * Process ring state packet
+ * \param message The ring state packet message
+ */
 void
 PennChord::RingState()
 {
+  // get local ip address
   Ipv4Address localIp = GetLocalAddress();
   std::string localId = ReverseLookup(localIp);
   uint32_t localHash = m_nodeHash;
 
+  // get predecessor ip address
   Ipv4Address predIp = m_predecessor;
   std::string predId = ReverseLookup(predIp);
   uint32_t predHash = PennKeyHelper::CreateShaKey(predIp);
 
+  // get successor ip address
   Ipv4Address succIp = m_successor;
   std::string succId = ReverseLookup(succIp);
   uint32_t succHash = PennKeyHelper::CreateShaKey(succIp);
@@ -702,33 +639,26 @@ PennChord::RingState()
   //packet overhead
   uint32_t transactionId = GetNextTransactionId();
   PennChordMessage msg = PennChordMessage(PennChordMessage::RINGSTATE_PKT, transactionId);
-  // CHORD_LOG("Created msg with type = " << msg.GetMessageType());
   msg.SetRingstatePkt(localIp);
 
-  // send packet to node that needs to be notified
+  // send packet to successor
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
-
-  // if (succIp == Ipv4Address::GetAny())
-  // {
-  //   CHORD_LOG("Error: succIp is empty");
-  //   return;
-  // }
   m_socket->SendTo(pkt, 0, InetSocketAddress(succIp, m_appPort));
-  // CHORD_LOG("SENDING RINGSTATE TO: " << ReverseLookup(succIp));
 }
 
+/**
+ * Process ring state packet
+ * \param message The ring state packet message
+ */
 void
 PennChord::ProcessRingStatePtk(PennChordMessage message)
 {
 
   PennChordMessage::RingstatePkt mssg = message.GetRingstatePkt();
-  Ipv4Address ringStateEnd = mssg.endRingState;
+  Ipv4Address ringStateEnd = mssg.endRingState; 
 
-  // CHORD_LOG("Received RingState packet at node " << ReverseLookup(GetLocalAddress()));
-
-  
-
+  // if the end of the ring state is the local address, then log the end of the ring state
   if (ringStateEnd == GetLocalAddress())
   {
     GraderLogs::EndOfRingState();
@@ -748,70 +678,53 @@ PennChord::ProcessRingStatePtk(PennChordMessage message)
     uint32_t succHash = PennKeyHelper::CreateShaKey(succIp);
 
     GraderLogs::RingState(localIp, localId, localHash, predIp, predId, predHash, succIp, succId, succHash);
-    //packet overhead
+
+    // packet overhead
     uint32_t transactionId = GetNextTransactionId();
     PennChordMessage msg = PennChordMessage(PennChordMessage::RINGSTATE_PKT, transactionId);
     msg.SetRingstatePkt(ringStateEnd);
-
     Ptr<Packet> pkt = Create<Packet>();
     pkt->AddHeader(msg);
-
-    // if (succIp == Ipv4Address::GetAny())
-    // {
-    //   CHORD_LOG("Error: succIp is empty");
-    //   return;
-    // }
     m_socket->SendTo(pkt, 0, InetSocketAddress(succIp, m_appPort));
   }
 }
 
+/**
+ * Leave the Chord ring
+ */
 void
 PennChord::Leave()
 {
-  //CHORD_LOG(ReverseLookup(GetLocalAddress()) << " leaving the chord");
-
-  //CHORD_LOG("Sending my current predecessor: " << m_predecessor << " to " << m_successor);
   // send packet to current successor, update the successor with this node's predecessor
-  //packet overhead
   uint32_t transactionId = GetNextTransactionId();
   PennChordMessage msg = PennChordMessage(PennChordMessage::LEAVE_SUCCESSOR, transactionId);
   msg.SetLeaveSuccessor(GetLocalAddress(), m_predecessor);
-
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
-
-  // if (m_successor == Ipv4Address::GetAny())
-  // {
-  //   CHORD_LOG("Error: m_successor is empty");
-  //   return;
-  // }
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
 
-  //CHORD_LOG("Sending my current successor: " << m_successor << " to " << m_predecessor);
   // send pack to current predecessor, update the predecessor with this node's successor
-  //packet overhead
   uint32_t transactionId2 = GetNextTransactionId();
   PennChordMessage msg2 = PennChordMessage(PennChordMessage::LEAVE_PREDECESSOR, transactionId2);
   msg2.SetLeavePredecessor(GetLocalAddress(), m_successor);
-
   Ptr<Packet> pkt2 = Create<Packet>();
   pkt2->AddHeader(msg2);
   m_socket->SendTo(pkt2, 0, InetSocketAddress(m_predecessor, m_appPort));
 
   // pass leave up to PennChord to pass on documents to successor
   if(!m_leaveCallback.IsNull()){
-    // CHORD_LOG("SETTING LEAVE CALLBACK");
     m_leaveCallback(m_successor);
   }
 
   m_predecessor = Ipv4Address::GetAny();
   m_successor = Ipv4Address::GetAny();
-
   m_leftChord = true;
-  
-  // StopApplication();
 }
 
+/**
+ * Process leave successor
+ * \param message The leave successor message
+ */
 void
 PennChord::ProcessLeaveSuccessor(PennChordMessage message)
 {
@@ -819,14 +732,16 @@ PennChord::ProcessLeaveSuccessor(PennChordMessage message)
   Ipv4Address newPredecessor = msg.newPred;
   Ipv4Address sender = msg.sender;
 
-  //CHORD_LOG("Received leave request from my predecessor " << ReverseLookup(sender) << " updating my predecessor to " << ReverseLookup(newPredecessor));
-
+  // update predecessor
   if (sender == m_predecessor) {
     m_predecessor = newPredecessor;
   }
-
 }
 
+/**
+ * Process leave predecessor
+ * \param message The leave predecessor message
+ */
 void
 PennChord::ProcessLeavePredecessor(PennChordMessage message)
 {
@@ -834,8 +749,7 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
   Ipv4Address newSuccessor = msg.newSucc;
   Ipv4Address sender = msg.sender;
 
-  //CHORD_LOG("Received leave request from my successor " << ReverseLookup(sender) << " updating my sucessor to " << ReverseLookup(newSuccessor));
-
+  // update successor
   if (sender == m_successor) {
     m_successor = newSuccessor;
   }
@@ -843,13 +757,15 @@ PennChord::ProcessLeavePredecessor(PennChordMessage message)
 
 /*Finger Table Methods*/
 
+/**
+ * Initialize the finger table
+ */
 void
 PennChord::InitFingerTable()
 {
   // check if finger table is already initialized
   if (m_fingerTableInitialized)
   {
-    // CHORD_LOG("Finger table already initialized");
     return;
   }
 
@@ -869,6 +785,9 @@ PennChord::InitFingerTable()
   m_fingerTableInitialized = true;
 }
 
+/**
+ * Fix the finger table
+ */
 void
 PennChord::FixFingerTable()
 {
@@ -899,25 +818,20 @@ PennChord::FixFingerTable()
   msg.SetFindSuccessorReq(target, GetLocalAddress());
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
-
-  // if (m_successor == Ipv4Address::GetAny())
-  // {
-  //   CHORD_LOG("Error: m_successor is empty");
-  //   return;
-  // }
-
   m_socket->SendTo(pkt, 0, InetSocketAddress(m_successor, m_appPort));
-
-  // autograder log
-  // CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, target));
 
   // advance m_nextFingerToFix and schedule next finger fix
   m_nextFingerToFix = (nextFinger + 1) % m_fingerTableSize;
   
-  // set to milliseconds?
+  // schedule next finger fix
   m_fixFingerTimer.Schedule(MilliSeconds(100));
 }
 
+/**
+ * Find the closest preceding finger
+ * \param idToFind The id to find
+ * \return The index of the closest preceding finger
+ */
 int
 PennChord::ClosestPrecedingFinger(uint32_t idToFind) const
 {
@@ -942,6 +856,11 @@ PennChord::ClosestPrecedingFinger(uint32_t idToFind) const
   return -1;
 }
 
+/**
+ * Lookup a node in the Chord ring
+ * \param transactionId The transaction id
+ * \param idToFind The id to find
+ */
 void
 PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
 {
@@ -953,13 +872,11 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
   // ChordLookup is a lookup, so set the flag to true
   msg.SetIsLookup(true);
   m_hopsPerLookup[transactionId] = 0;
-  // CHORD_LOG("IsLookup: " << msg.GetIsLookup() << " for id " << idToFind);
 
+  // send find successor request to the next hop
   msg.SetFindSuccessorReq(idToFind, GetLocalAddress());
-
   Ptr<Packet> pkt = Create<Packet>();
   pkt->AddHeader(msg);
-
   Ipv4Address nextHop;
   
   // Use finger table to find next hop toward idToFind
@@ -974,17 +891,20 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
     nextHop = m_successor;
   }
 
+  // increment hops per lookup
   if (msg.GetIsLookup())
   {
     m_hopsPerLookup[transactionId] += 1;
   }
 
-  // CHORD_LOG("ChordLookup: Sending FIND_SUCCESSOR_REQ to " << ReverseLookup(nextHop) << " for id " << idToFind);
-
+  // send find successor request to the next hop
   m_socket->SendTo(pkt, 0, InetSocketAddress(nextHop, m_appPort));
 
- CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, idToFind));
+  // log lookup issue
+  CHORD_LOG(GraderLogs::GetLookupIssueLogStr(m_nodeHash, idToFind));
 }
+
+/** CALLBACKS */
 
 void 
 PennChord::SetLookUpCallback(Callback<void, Ipv4Address, uint32_t> lookupCb)
@@ -1054,7 +974,6 @@ void
 PennChord::TriggerRejoinCallback()
 {
   if (!m_rejoinCallback.IsNull()) {
-    // CHORD_LOG("Triggering REJOIN callback with successor: " << ReverseLookup(m_successor));
     m_rejoinCallback(m_successor);
   }
 }
