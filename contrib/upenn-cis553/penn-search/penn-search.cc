@@ -555,6 +555,20 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 
   auto it = m_invertedIndex.find(currentKeyword);
 
+  if (requester == GetLocalAddress() &&
+      m_invertedIndex.find(currentKeyword) == m_invertedIndex.end())
+  {
+    // no inverted list here → empty result
+    PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
+    std::vector<std::string> empty;
+    resp.SetSearchRsp(requester, empty);  // empty vector
+    Ptr<Packet> packet = Create<Packet>();
+    packet->AddHeader(resp);
+    m_socket->SendTo(packet, 0,
+                    InetSocketAddress(requester, m_appPort));
+    return;
+  }
+
   // this means we have the keyword in the inverted index of the current node
   if (it != m_invertedIndex.end()) {
     // this is the set of docIDs that will be returned
@@ -628,13 +642,9 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 void
 PennSearch::ProcessSearchRsp(PennSearchMessage message, Ipv4Address sourceAddress, uint16_t sourcePort)
 {
-  // unpack search response
-  PennSearchMessage::SearchRsp search_rsp = message.GetSearchRsp();
-  std::vector<std::string> results = search_rsp.results;
-  Ipv4Address requester = search_rsp.requester;
-  // uint32_t tid = message.GetTransactionId();
-
-  // log search results for grader
+  auto rsp = message.GetSearchRsp();
+  auto results = rsp.results;
+  auto requester = rsp.requester;
   SEARCH_LOG(GraderLogs::GetSearchResultsLogStr(requester, results));
 }
 
@@ -705,23 +715,35 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 
   auto searchIt = m_pendingSearches.find(tid);
   if (searchIt != m_pendingSearches.end()) {
-    // unpack search request
-    std::vector<std::string> keywords = std::get<0>(searchIt->second);
-    std::vector<std::string> docIds = std::get<1>(searchIt->second);
-    Ipv4Address requester = std::get<2>(searchIt->second);
-    uint32_t keywordIndex = std::get<3>(searchIt->second);
+    auto &tuple = searchIt->second;
+    auto &keywords = std::get<0>(tuple);
+    auto &docIds = std::get<1>(tuple);
+    Ipv4Address requester = std::get<2>(tuple);
+    uint32_t keywordIndex = std::get<3>(tuple);
 
-    
+    // detect a “missing” inverted-list:
+    const std::string &kw = keywords[keywordIndex];
+    if (owner == GetLocalAddress() &&
+        m_invertedIndex.find(kw) == m_invertedIndex.end())
+    {
+      // owner==me && no data → send back {} to the ORIGINAL requester
+      PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
+      std::vector<std::string> empty;
+      resp.SetSearchRsp(requester, empty);  
+      Ptr<Packet> pkt = Create<Packet>();
+      pkt->AddHeader(resp);
+      m_socket->SendTo(pkt, 0, InetSocketAddress(requester, m_appPort));
+      m_pendingSearches.erase(searchIt);
+      return;
+    }
 
-    PennSearchMessage message = PennSearchMessage (PennSearchMessage::SEARCH_REQ, tid);
-    message.SetSearchReq (requester, keywords, docIds, keywordIndex);
-    Ptr<Packet> packet = Create<Packet> ();
-    packet->AddHeader (message);
-    m_socket->SendTo (packet, 0 , InetSocketAddress (owner, m_appPort));
-
+    // Otherwise forward the SEARCH_REQ to “owner” as you already do:
+    PennSearchMessage fwd(PennSearchMessage::SEARCH_REQ, tid);
+    fwd.SetSearchReq(requester, keywords, docIds, keywordIndex);
+    Ptr<Packet> pkt = Create<Packet>();
+    pkt->AddHeader(fwd);
+    m_socket->SendTo(pkt, 0, InetSocketAddress(owner, m_appPort));
     m_pendingSearches.erase(tid);
-
-    //CHORD_LOG("FORWARDING SEARCH_REQ TO " << ReverseLookup(owner) << " for KEYWORD: " << keywords[keywordIndex] << " with transactionId: " << tid);
   }
 
   // SEARCH_LOG("unknown type of request");
@@ -734,16 +756,26 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 void
 PennSearch::HandleChordLookupFailure(uint32_t tid)
 {
-  // lookup failure for unknown transaction ID
-  auto it = m_pendingPublishes.find(tid);
-  if (it == m_pendingPublishes.end()) {
-    // DEBUG_LOG("Lookup failure for unknown transaction ID");
-    return;
+  auto it = m_pendingSearches.find(tid);
+  if (it == m_pendingSearches.end())
+  {
+    return;  // not a search we care about
   }
-  else {
-    m_pendingPublishes.erase(it); // remove from pending publishes after lookup failure
-    // DEBUG_LOG("Lookup failure for transaction ID: " << tid);
-  }
+  // pull requester out of the tuple:
+  std::vector<std::string> keywords = std::get<0>(it->second);
+  std::vector<std::string> docIds = std::get<1>(it->second);
+  Ipv4Address requester = std::get<2>(it->second);
+
+  // send empty result
+  PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
+  std::vector<std::string> empty;
+  resp.SetSearchRsp(requester, empty);   // empty vector
+  Ptr<Packet> packet = Create<Packet>();
+  packet->AddHeader(resp);
+  m_socket->SendTo(packet, 0,
+                   InetSocketAddress(requester, m_appPort));
+
+  m_pendingSearches.erase(it);
 }
 
 /**
