@@ -77,6 +77,7 @@ class PennChordMessage : public Header
      */
     MessageType m_messageType;
     uint32_t m_transactionId;
+    bool m_isLookup;  // true if this is a lookup message
     /**
      *  \endcond
      */
@@ -88,6 +89,9 @@ class PennChordMessage : public Header
     void Serialize (Buffer::Iterator start) const;
     uint32_t Deserialize (Buffer::Iterator start);
 
+    // isLookup getter and setter
+    void SetIsLookup (bool isLookup);
+    bool GetIsLookup () const;
     
     struct PingReq
       {

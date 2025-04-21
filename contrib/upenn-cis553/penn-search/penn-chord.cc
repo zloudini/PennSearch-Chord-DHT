@@ -60,7 +60,14 @@ PennChord::PennChord ()
 
 PennChord::~PennChord ()
 {
+  if (m_numLookups > 0)
+  {
+    std::string nodeId = ReverseLookup(GetLocalAddress());
+    double avgHops = static_cast<double>(m_totalHops) / static_cast<double>(m_numLookups);
 
+    CHORD_LOG("Average hops for lookups on node " << nodeId << " is " << avgHops);
+    GraderLogs::AverageHopCount(nodeId, m_numLookups, m_totalHops);
+  }
 }
 
 void
@@ -344,6 +351,13 @@ PennChord::Join(Ipv4Address landmark)
 void
 PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 {
+  // debug to see when true lookups is triggered in ProcessFindSuccessorReq
+  if (message.GetIsLookup())
+  {
+    CHORD_LOG("Received FIND_SUCCESSOR_REQ for id" << message.GetFindSuccessorReq().idToFind);
+    GraderLogs::GetLookupIssueLogStr(m_nodeHash, message.GetFindSuccessorReq().idToFind);
+  }
+
   PennChordMessage::FindSuccessorReq req = message.GetFindSuccessorReq();
   uint32_t idToFind = req.idToFind;
   Ipv4Address requestorIp = req.requestorIp;
@@ -366,6 +380,8 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     uint32_t transactionId = message.GetTransactionId();
     PennChordMessage resp = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_RSP, transactionId);
 
+    // set isLookup to be that of the requestor
+    resp.SetIsLookup(message.GetIsLookup());
     resp.SetFindSuccessorRsp(m_successor);
 
     Ptr<Packet> packet = Create<Packet>();
@@ -392,6 +408,14 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
     // }
     
     // forward to successor
+
+    if (message.GetIsLookup())
+    {
+      uint32_t tx = message.GetTransactionId();
+      m_hopsPerLookup[tx] += 1;
+      // add to pending lookups
+      GraderLogs::GetLookupForwardingLogStr(m_nodeHash, ReverseLookup(m_successor), PennKeyHelper::CreateShaKey(m_successor), idToFind);
+    }
 
     int fingerTableIndex = ClosestPrecedingFinger(idToFind);
     Ipv4Address nextHopIp = (fingerTableIndex != -1) ? m_fingerTable[fingerTableIndex].finger_ip : m_successor;
@@ -423,6 +447,20 @@ PennChord::ProcessFindSuccessorReq(PennChordMessage message)
 void
 PennChord::ProcessFindSuccessorRsp(PennChordMessage message)
 {
+  // debug to see when true lookups is triggered in ProcessFindSuccessorRsp
+  if (message.GetIsLookup())
+  {
+    uint32_t tx = message.GetTransactionId();
+    auto it = m_hopsPerLookup.find(tx);
+    if (it != m_hopsPerLookup.end())
+    {
+      m_totalHops += it->second;
+      m_numLookups++;
+      m_hopsPerLookup.erase(it);
+    }
+    CHORD_LOG("Received FIND_SUCCESSOR_RSP for id" << message.GetFindSuccessorRsp().successorIp);
+  }
+
   PennChordMessage::FindSuccessorRsp rsp = message.GetFindSuccessorRsp();
   Ipv4Address successorIp = rsp.successorIp;
 
@@ -912,6 +950,11 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
 
   PennChordMessage msg = PennChordMessage(PennChordMessage::FIND_SUCCESSOR_REQ, transactionId);
 
+  // ChordLookup is a lookup, so set the flag to true
+  msg.SetIsLookup(true);
+  m_hopsPerLookup[transactionId] = 0;
+  // CHORD_LOG("IsLookup: " << msg.GetIsLookup() << " for id " << idToFind);
+
   msg.SetFindSuccessorReq(idToFind, GetLocalAddress());
 
   Ptr<Packet> pkt = Create<Packet>();
@@ -929,6 +972,11 @@ PennChord::ChordLookup(uint32_t transactionId, uint32_t idToFind)
   {
     // fallback to successor if no better finger found
     nextHop = m_successor;
+  }
+
+  if (msg.GetIsLookup())
+  {
+    m_hopsPerLookup[transactionId] += 1;
   }
 
   // CHORD_LOG("ChordLookup: Sending FIND_SUCCESSOR_REQ to " << ReverseLookup(nextHop) << " for id " << idToFind);

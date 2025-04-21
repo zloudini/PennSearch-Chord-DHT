@@ -34,6 +34,7 @@
 #include "ns3/timer.h"
 #include "ns3/uinteger.h"
 #include "ns3/boolean.h"
+#include <unordered_map>
 
 using namespace ns3;
 
@@ -101,6 +102,11 @@ class PennChord : public PennApplication
     virtual void StartApplication (void);
     virtual void StopApplication (void);
 
+    // hop count trackers
+    std::unordered_map<uint32_t, uint32_t> m_hopsPerLookup; // key: transactionId, value: hops
+
+    uint16_t m_totalHops = 0;
+    uint16_t m_numLookups = 0;
 
     uint32_t m_currentTransactionId;
     Ptr<Socket> m_socket;
