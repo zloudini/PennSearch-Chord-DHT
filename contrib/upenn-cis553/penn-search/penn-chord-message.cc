@@ -34,6 +34,19 @@ PennChordMessage::PennChordMessage (PennChordMessage::MessageType messageType, u
 {
   m_messageType = messageType;
   m_transactionId = transactionId;
+  m_isLookup = false;
+}
+
+void
+PennChordMessage::SetIsLookup (bool flag)
+{
+  m_isLookup = flag;
+}
+
+bool
+PennChordMessage::GetIsLookup () const
+{
+  return m_isLookup;
 }
 
 TypeId 
@@ -56,8 +69,8 @@ PennChordMessage::GetInstanceTypeId (void) const
 uint32_t
 PennChordMessage::GetSerializedSize (void) const
 {
-  // size of messageType, transaction id
-  uint32_t size = sizeof (uint8_t) + sizeof (uint32_t);
+  // size of messageType, transaction id, isLookup bool
+  uint32_t size = sizeof (uint8_t) + sizeof (uint32_t) + sizeof (uint8_t);
   switch (m_messageType)
     {
       case PING_REQ:
@@ -148,6 +161,7 @@ PennChordMessage::Serialize (Buffer::Iterator start) const
   Buffer::Iterator i = start;
   i.WriteU8 (m_messageType);
   i.WriteHtonU32 (m_transactionId);
+  i.WriteU8 (m_isLookup ? 1 : 0); // serialize 1 for true, 0 for false
 
   switch (m_messageType)
     {
@@ -193,8 +207,9 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
   Buffer::Iterator i = start;
   m_messageType = (MessageType) i.ReadU8 ();
   m_transactionId = i.ReadNtohU32 ();
+  m_isLookup = i.ReadU8() == 1; // deserialize 1 for true, 0 for false
 
-  size = sizeof (uint8_t) + sizeof (uint32_t);
+  size = sizeof (uint8_t) + sizeof (uint32_t) + sizeof (uint8_t);
 
   switch (m_messageType)
     {
