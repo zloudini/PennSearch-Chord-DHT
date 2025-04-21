@@ -70,7 +70,7 @@ uint32_t
 PennChordMessage::GetSerializedSize (void) const
 {
   // size of messageType, transaction id, isLookup bool
-  uint32_t size = sizeof (uint8_t) + sizeof (uint32_t) + sizeof (bool);
+  uint32_t size = sizeof (uint8_t) + sizeof (uint32_t) + sizeof (uint8_t);
   switch (m_messageType)
     {
       case PING_REQ:
@@ -209,7 +209,7 @@ PennChordMessage::Deserialize (Buffer::Iterator start)
   m_transactionId = i.ReadNtohU32 ();
   m_isLookup = i.ReadU8() == 1; // deserialize 1 for true, 0 for false
 
-  size = sizeof (uint8_t) + sizeof (uint32_t);
+  size = sizeof (uint8_t) + sizeof (uint32_t) + sizeof (uint8_t);
 
   switch (m_messageType)
     {
