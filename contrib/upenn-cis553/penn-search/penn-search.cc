@@ -555,19 +555,6 @@ PennSearch::ProcessSearchReq (PennSearchMessage message, Ipv4Address sourceAddre
 
   auto it = m_invertedIndex.find(currentKeyword);
 
-  if (requester == GetLocalAddress() &&
-      m_invertedIndex.find(currentKeyword) == m_invertedIndex.end())
-  {
-    // no inverted list here → empty result
-    PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
-    std::vector<std::string> empty;
-    resp.SetSearchRsp(requester, empty);  // empty vector
-    Ptr<Packet> packet = Create<Packet>();
-    packet->AddHeader(resp);
-    m_socket->SendTo(packet, 0,
-                    InetSocketAddress(requester, m_appPort));
-    return;
-  }
 
   // this means we have the keyword in the inverted index of the current node
   if (it != m_invertedIndex.end()) {
@@ -715,6 +702,7 @@ PennSearch::HandleChordLookupSuccess(uint32_t tid, Ipv4Address owner)
 
   auto searchIt = m_pendingSearches.find(tid);
   if (searchIt != m_pendingSearches.end()) {
+    // unpack search request
     auto &tuple = searchIt->second;
     auto &keywords = std::get<0>(tuple);
     auto &docIds = std::get<1>(tuple);
@@ -762,20 +750,22 @@ PennSearch::HandleChordLookupFailure(uint32_t tid)
     return;  // not a search we care about
   }
   // pull requester out of the tuple:
-  std::vector<std::string> keywords = std::get<0>(it->second);
-  std::vector<std::string> docIds = std::get<1>(it->second);
-  Ipv4Address requester = std::get<2>(it->second);
+  else {
+    std::vector<std::string> keywords = std::get<0>(it->second);
+    std::vector<std::string> docIds = std::get<1>(it->second);
+    Ipv4Address requester = std::get<2>(it->second);
 
-  // send empty result
-  PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
-  std::vector<std::string> empty;
-  resp.SetSearchRsp(requester, empty);   // empty vector
-  Ptr<Packet> packet = Create<Packet>();
-  packet->AddHeader(resp);
-  m_socket->SendTo(packet, 0,
-                   InetSocketAddress(requester, m_appPort));
+    // send empty result
+    PennSearchMessage resp(PennSearchMessage::SEARCH_RSP, tid);
+    std::vector<std::string> empty;
+    resp.SetSearchRsp(requester, empty);   // empty vector
+    Ptr<Packet> packet = Create<Packet>();
+    packet->AddHeader(resp);
+    m_socket->SendTo(packet, 0,
+                    InetSocketAddress(requester, m_appPort));
 
-  m_pendingSearches.erase(it);
+    m_pendingSearches.erase(it);
+  }
 }
 
 /**
